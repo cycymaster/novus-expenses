@@ -14,9 +14,9 @@ Single-file mobile web app (`index.html`) used by Novus Aviation Capital employe
 - Data stays on the employee's phone: IndexedDB `novus-expenses` v3 (stores `expenses`, `folders`; legacy `reports` kept and migrated into folders), localStorage `novus-profile`. OCR runs on the phone. Never add a server call, upload or analytics.
 - Expense record: id, created, date, category, merchant, reason, desc, amount, currency, claim, claimCcy, photo, folderId (absent = unfiled). Folder record: id, name, no (EXP-<initials>-<YYMM>-<nn>), status pending|sent|paid, statusAt, created, pdfSig. Old records may only have `desc`: read via reasonOf()/merchantOf().
 - Changing the IndexedDB name or record shape loses users' data: bump the version and migrate, never rename.
-- Profile holds only Name, Claim currency and FX rates.
+- Profile holds Name, Claim currency, FX rates and a finger-drawn signature (PNG in profile.sig), printed in the PDF SIGNATURE box.
 - Brand: Novus navy #093C71, steel grey #97A4AF, logo embedded as base64 PNG in `.logo`. Don't replace the logo with a link.
-- The PDF keeps the Novus Expense Form structure: logo + EXPENSE FORM + folder name and number; NAME / PERIOD FROM / PERIOD TO header; columns DATE, DESCRIPTION, EXPENSE CATEGORY, AMOUNT, <claim ccy> CREDIT, INITIAL, CURRENCY, RECEIPT; SUBTOTALS, GRAND TOTAL, blank SIGNATURE and APPROVED BY lines; receipts two per page tagged R1, R2…
+- The PDF keeps the Novus Expense Form structure: logo + EXPENSE FORM + folder name and number; NAME / PERIOD FROM / PERIOD TO header; columns DATE, DESCRIPTION, EXPENSE CATEGORY, AMOUNT, <claim ccy> CREDIT, INITIAL, CURRENCY, RECEIPT; SUBTOTALS, GRAND TOTAL, SIGNATURE (employee signature image if saved) and blank APPROVED BY line; receipts two per page tagged R1, R2…
 - Default FX rates: USD 3.6725, EUR 3.85 (to AED). Editable in Profile.
 - Must work on iPhone Safari and Android Chrome, installed to home screen. Test at 390px width.
 - `navigator.share` must run from a tap: keep PDF creation and Email as two separate buttons.

@@ -136,6 +136,10 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .stat:last-child{border-bottom:0}
 .stat .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 .pdfname{font-family:var(--f-num);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.sigbox{position:relative;border:1px solid var(--line);border-radius:12px;background:#FFFFFF;height:160px;touch-action:none}
+.sigbox canvas{width:100%;height:100%;display:block;border-radius:12px;cursor:crosshair}
+.sigbox .hint{position:absolute;left:14px;bottom:10px;font-size:12px;color:#8A96A2;pointer-events:none}
+.sigbox::after{content:"";position:absolute;left:14px;right:14px;bottom:34px;border-top:1px solid #D5DEE7;pointer-events:none}
 .rates{display:flex;flex-direction:column;gap:8px}
 .rate{display:grid;grid-template-columns:90px minmax(0,1fr) 40px;gap:8px;align-items:center}
 .rate input{font-family:var(--f-num)}
@@ -293,6 +297,11 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
       <button class="btn primary block" type="submit">Save profile</button>
     </form>
     <div class="card stack">
+      <div><span class="label">Signature</span><p class="sub" id="sigSub">Sign once with your finger. It is printed in the SIGNATURE box of every expense form PDF.</p></div>
+      <div class="sigbox"><canvas id="sig" aria-label="Signature pad"></canvas><span class="hint" id="sigHint">Sign here</span></div>
+      <div class="grid2"><button class="btn" id="sigClear" type="button">Clear</button><button class="btn primary" id="sigSave" type="button">Save signature</button></div>
+    </div>
+    <div class="card stack">
       <div><span class="label">Exchange rates</span><p class="sub" id="ratesSub"></p></div>
       <div class="rates" id="rates"></div>
       <button class="btn small" id="addRate" type="button" style="align-self:flex-start">Add currency</button>
@@ -302,7 +311,7 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
       <p class="sub">Expenses, receipt photos and folders are stored on this phone only. Receipts are read on the phone; nothing is uploaded.</p>
       <div class="grid2"><button class="btn" id="csvBtn">Export CSV</button><button class="btn danger" id="wipeBtn">Delete all data</button></div>
     </div>
-    <p class="sub" style="text-align:center">App version 1.7 · 27 Oct 2026</p>
+    <p class="sub" style="text-align:center">App version 1.8 · 27 Oct 2026</p>
   </section>
 </main>
 
@@ -436,8 +445,8 @@ const st=(n,m)=>db.transaction(n,m).objectStore(n);
 const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const all=n=>req(st(n,"readonly").getAll()), put=(n,o)=>req(st(n,"readwrite").put(o)), del=(n,id)=>req(st(n,"readwrite").delete(id)), clear=n=>req(st(n,"readwrite").clear());
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}}};
-let S=Object.assign({name:"",base:"AED",rates:null},ls.get("novus-profile",{}));
-["dept","mgr","acct","sig"].forEach(k=>delete S[k]);
+let S=Object.assign({name:"",base:"AED",rates:null,sig:""},ls.get("novus-profile",{}));
+["dept","mgr","acct"].forEach(k=>delete S[k]);
 if(!S.rates) S.rates={...DEFAULT_RATES[S.base]};
 const saveProfile=()=>ls.set("novus-profile",S);
 let ALL=[], FOLDERS=[];
@@ -889,6 +898,8 @@ async function buildPDF(rows,folder){
   const bw=(W-2*M-12)/2, bx2=M+bw+12;
   doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...NAVY);
   doc.text("SIGNATURE:",M,y); doc.text("APPROVED BY:",bx2,y);
+  if(S.sig){ try{ const sp=doc.getImageProperties(S.sig); let sh=18, sw=sp.width*sh/sp.height; if(sw>bw-6){ sw=bw-6; sh=sw*sp.height/sp.width; }
+    doc.addImage(S.sig,"PNG",M+3,y+23-sh,sw,sh); }catch(e){ console.warn("signature",e); } }
   doc.setDrawColor(...STEEL); doc.setLineWidth(.3); doc.line(M,y+24,M+bw,y+24); doc.line(bx2,y+24,bx2+bw,y+24);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...GREY);
   doc.text(`Employee — ${S.name}`,M,y+29); doc.text("Department",bx2,y+29);
@@ -914,7 +925,7 @@ async function buildPDF(rows,folder){
 }
 
 /* ---------- Profile ---------- */
-function fillProfile(){ $("#s-name").value=S.name; $("#s-base").value=S.base; renderRates(); }
+function fillProfile(){ $("#s-name").value=S.name; $("#s-base").value=S.base; renderRates(); loadSig(); }
 $("#sForm").onsubmit=ev=>{ev.preventDefault();
   const base=$("#s-base").value; if(base!==S.base){S.rates={...DEFAULT_RATES[base]}}
   S.name=$("#s-name").value.trim(); S.base=base;
@@ -930,6 +941,33 @@ function renderRates(){
   $$("#rates .rd").forEach(b=>b.onclick=()=>{delete S.rates[b.dataset.k];saveProfile();renderRates()});
 }
 $("#addRate").onclick=()=>{const c=CURRENCIES.find(c=>c!==S.base&&!(c in S.rates));if(c){S.rates[c]=1;saveProfile();renderRates()}};
+/* signature pad: drawn with a finger, cropped to the ink, stored as PNG in the profile */
+const sig=$("#sig"); let sctx=null, drawing=false, inked=false;
+function sizeSig(){ const rc=sig.getBoundingClientRect(); if(!rc.width) return false; const d=window.devicePixelRatio||1;
+  sig.width=Math.round(rc.width*d); sig.height=Math.round(rc.height*d); sctx=sig.getContext("2d"); sctx.setTransform(d,0,0,d,0,0);
+  sctx.lineWidth=2.4; sctx.lineCap="round"; sctx.lineJoin="round"; sctx.strokeStyle="#0B2238"; return true; }
+function loadSig(){ requestAnimationFrame(()=>{ if(!sizeSig()) return; inked=false; $("#sigHint").hidden=!!S.sig;
+  $("#sigSub").textContent=S.sig?"Saved. It is printed in the SIGNATURE box of every expense form PDF. Clear to sign again.":"Sign once with your finger. It is printed in the SIGNATURE box of every expense form PDF.";
+  if(S.sig){ const im=new Image(); im.onload=()=>{ const rc=sig.getBoundingClientRect(), k=Math.min((rc.width-28)/im.width,(rc.height-50)/im.height,1.5);
+    sctx.drawImage(im,(rc.width-im.width*k)/2,(rc.height-34-im.height*k)/2+6,im.width*k,im.height*k); }; im.src=S.sig; } }); }
+const pt=e=>{ const rc=sig.getBoundingClientRect(); return [e.clientX-rc.left,e.clientY-rc.top]; };
+sig.addEventListener("pointerdown",e=>{ e.preventDefault(); if(!sctx&&!sizeSig()) return; if(S.sig&&!inked){ sizeSig(); }
+  drawing=true; sig.setPointerCapture(e.pointerId); const [x,y]=pt(e); sctx.beginPath(); sctx.moveTo(x,y); sctx.lineTo(x+0.1,y+0.1); sctx.stroke(); inked=true; $("#sigHint").hidden=true; });
+sig.addEventListener("pointermove",e=>{ if(!drawing) return; e.preventDefault(); const [x,y]=pt(e); sctx.lineTo(x,y); sctx.stroke(); });
+["pointerup","pointercancel","pointerleave"].forEach(t=>sig.addEventListener(t,()=>{ drawing=false; }));
+$("#sigClear").onclick=()=>{ sizeSig(); inked=false; S.sig=""; saveProfile(); $("#sigHint").hidden=false; loadSig(); toast("Signature cleared"); };
+$("#sigSave").onclick=()=>{
+  if(!inked){ toast(S.sig?"Signature already saved.":"Sign in the box first."); return; }
+  const w=sig.width,h=sig.height,d=sctx.getImageData(0,0,w,h).data; let x0=w,y0=h,x1=-1,y1=-1;
+  for(let yy=0;yy<h;yy+=2) for(let xx=0;xx<w;xx+=2){ if(d[(yy*w+xx)*4+3]>20){ if(xx<x0)x0=xx; if(xx>x1)x1=xx; if(yy<y0)y0=yy; if(yy>y1)y1=yy; } }
+  if(x1<0){ toast("Sign in the box first."); return; }
+  const pad=10, cw=x1-x0+2*pad, ch=y1-y0+2*pad, o=document.createElement("canvas"), k=Math.min(1,600/cw); o.width=Math.round(cw*k); o.height=Math.round(ch*k);
+  o.getContext("2d").drawImage(sig,x0-pad,y0-pad,cw,ch,0,0,o.width,o.height);
+  S.sig=o.toDataURL("image/png"); inked=false;
+  if(saveProfile()){ toast("Signature saved. It will appear on your PDFs."); loadSig(); } else toast("Could not save the signature on this phone.");
+};
+window.addEventListener("resize",()=>{ if(view==="profile"&&!inked) loadSig(); });
+
 $("#csvBtn").onclick=()=>{
   const h=["date","merchant","reason","expense_category","amount_"+S.base,"initial","currency","receipt","folder","folder_status"];
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
