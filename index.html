@@ -70,6 +70,7 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.danger{color:var(--bad)}
+.btn.green{background:var(--good);color:#FFFFFF;border-color:var(--good)}
 .btn.small{padding:7px 12px;font-size:13px}
 .btn.block{width:100%}
 .btn.big{padding:15px;font-size:16px;border-radius:14px}
@@ -181,6 +182,7 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
 </header>
 
 <input id="fileCam" type="file" accept="image/*" capture="environment" hidden>
+<input id="fileLib" type="file" accept="image/*" hidden>
 
 <main>
   <!-- EXPENSES (unfiled) -->
@@ -190,7 +192,10 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
     <div class="card summary" id="inboxSum"></div>
     <div class="notice" id="inboxNotice" hidden></div>
     <div class="list" id="inboxList"></div>
-    <button class="btn small" id="manualBtn" style="align-self:center">Add an expense without receipt</button>
+    <div class="stack" style="gap:10px">
+      <button class="btn green block" id="manualBtn">Add expense without receipt</button>
+      <button class="btn block" id="libBtn">Add receipt from photos</button>
+    </div>
   </section>
 
   <!-- REVIEW -->
@@ -202,7 +207,7 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
         <div class="status" id="revStatus"></div>
         <div class="bar2" id="revBar" hidden><i></i></div>
         <p class="sub" id="revHint"></p>
-        <div class="row"><button class="btn small" id="retake" type="button">Retake photo</button></div>
+        <div class="row wrapflex"><button class="btn small" id="retake" type="button">Take photo</button><button class="btn small" id="fromLib" type="button">From photos</button></div>
       </div>
     </div>
     <form id="form" class="card stack" novalidate>
@@ -525,7 +530,7 @@ function renderInbox(){
   const iss=issuesHtml(rows); $("#inboxNotice").hidden=!iss; $("#inboxNotice").innerHTML=iss;
   const L=$("#inboxList");
   if(!rows.length){
-    L.innerHTML=`<div class="card empty"><b>No unfiled expenses</b><p class="sub">Tap <b>Scan receipt</b>. The amount, date and merchant are read automatically; you add the reason. File expenses into folders like ${esc(monthLabel())} when you're ready.</p>
+    L.innerHTML=`<div class="card empty"><b>No unfiled expenses</b><p class="sub">Tap <b>Scan receipt</b>, or pick a receipt from your photos. The amount, date and merchant are read automatically; you add the reason. File expenses into folders like ${esc(monthLabel())} when you're ready.</p>
       ${ALL.length?"":`<button class="btn small" id="sampleBtn">Load a sample trip to try</button>`}</div>`;
     const sb=$("#sampleBtn"); if(sb) sb.onclick=loadSamples; return;
   }
@@ -695,13 +700,15 @@ let editing=null, photo=null, claimTouched=false, scanToken=0, scanFolder="";
 fillSelect($("#f-cat"),CATS,"Other");
 function startScan(folderId){ scanFolder=folderId||""; returnTo=view==="folder"?"folder":"inbox"; $("#fileCam").click(); }
 $("#manualBtn").onclick=()=>{ scanFolder=""; returnTo="inbox"; openReview(null,null); };
+$("#libBtn").onclick=()=>{ scanFolder=""; returnTo="inbox"; $("#fileLib").click(); };
 $("#retake").onclick=()=>$("#fileCam").click();
-$("#fileCam").onchange=async ev=>{
+$("#fromLib").onclick=()=>$("#fileLib").click();
+$("#fileCam").onchange=$("#fileLib").onchange=async ev=>{
   const file=ev.target.files[0]; ev.target.value=""; if(!file) return;
   let img; try{ img=await compress(file,1600,.72); }catch{ toast("Could not read that image. Try again."); return; }
   if(view==="review"){ photo=img; setPic(img); runOCR(img); } else openReview(null,img);
 };
-function setPic(src){const p=$("#revPic");p.style.backgroundImage=src?`url(${src})`:"";p.textContent=src?"":"No photo";$("#retake").textContent=src?"Retake photo":"Add photo"}
+function setPic(src){const p=$("#revPic");p.style.backgroundImage=src?`url(${src})`:"";p.textContent=src?"":"No photo";$("#retake").textContent=src?"Retake photo":"Take photo";$("#fromLib").textContent=src?"Replace from photos":"From photos"}
 $("#revPic").onclick=()=>{ if(photo){ openSheet(`<img src="${photo}" alt="Receipt"><button class="btn block" id="cls">Close</button>`); $("#cls").onclick=closeModal; } else $("#fileCam").click(); };
 function setAuto(id,on){ const el=$("#"+id); el.classList.toggle("auto",!!on); const t=document.querySelector(`.autotag[data-for="${id}"]`); if(t) t.hidden=!on; }
 ["f-amount","f-currency","f-date","f-cat","f-merchant"].forEach(id=>$("#"+id).addEventListener("input",()=>setAuto(id,false)));
@@ -733,7 +740,7 @@ function openReview(e,img){
   if(e&&e.currency!==S.base){$("#f-claim").value=r2(claim(e)).toFixed(2);$("#f-rate").value=+(claim(e)/e.amount).toFixed(4);claimTouched=true;updateHint()}
   if(e){ status(""); $("#revHint").textContent=""; }
   else if(img){ runOCR(img); }
-  else { status(""); $("#revHint").textContent="No receipt? Enter the details below. You can add a photo later."; }
+  else { status(""); $("#revHint").textContent="Enter the details below. You can add a receipt photo any time: take one or pick it from your photos."; }
   view="review"; endSelect(); $$("main section").forEach(s=>s.hidden=s.id!=="v-review"); window.scrollTo(0,0);
 }
 function back(){ if(returnTo==="folder"&&folderById(openFolderId)) show("folder"); else show("inbox"); }
