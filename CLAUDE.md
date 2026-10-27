@@ -10,7 +10,7 @@ Single-file mobile web app (`index.html`) used by Novus Aviation Capital employe
 
 ## Rules for changes
 - Keep everything in `index.html` (HTML + CSS + JS inline). No build step, no frameworks.
-- External scripts only: jsPDF 2.5.1 and jspdf-autotable 3.8.2 (cdnjs), tesseract.js 5.1.1 (jsDelivr, loaded lazily; it fetches its wasm core and English data from jsDelivr). Pin exact versions.
+- External scripts only, all loaded on demand with exact versions: jsPDF 2.5.1 + jspdf-autotable 3.8.2 (jsDelivr → unpkg → cdnjs fallback, see PDF_SRC/ensurePDF), tesseract.js 5.1.1 (jsDelivr).
 - Data stays on the employee's phone: IndexedDB `novus-expenses` v3 (stores `expenses`, `folders`; legacy `reports` kept and migrated into folders), localStorage `novus-profile`. OCR runs on the phone. Never add a server call, upload or analytics.
 - Expense record: id, created, date, category, merchant, reason, desc, amount, currency, claim, claimCcy, photo, folderId (absent = unfiled). Folder record: id, name, no (EXP-<initials>-<YYMM>-<nn>), status pending|sent|paid, statusAt, created, pdfSig. Old records may only have `desc`: read via reasonOf()/merchantOf().
 - Changing the IndexedDB name or record shape loses users' data: bump the version and migrate, never rename.
