@@ -672,7 +672,6 @@ let DUP=new Set();
 function findDups(){DUP=new Set();const by={};for(const e of ALL){const k=e.currency+"|"+e.amount;(by[k]=by[k]||[]).push(e)}
   for(const g of Object.values(by)) if(g.length>1) for(const a of g) for(const b of g) if(a!==b&&Math.abs(new Date(a.date)-new Date(b.date))<=7*864e5){DUP.add(a.id);DUP.add(b.id)}}
 async function reload(){ALL=await dbAll();findDups();renderHeader();renderList()}
-window.__novus={dbPut,reload,setProfile:p=>{Object.assign(S,p);saveProfile();renderHeader()}};
 (async()=>{
   setupIcon(); fillSelect($("#f-currency"),CURRENCIES,S.base);
   try{await openDB();await reload()}catch{toast("This browser blocks storage. Open the app in Safari or Chrome.")}
