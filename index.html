@@ -271,6 +271,7 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
       <button class="btn primary big block" id="pdfMake">Create PDF</button>
       <div class="stack" id="pdfReady" hidden style="gap:10px">
         <div class="pdfname" id="pdfName"></div>
+        <button class="btn primary big block" id="pdfOpen">Open PDF</button>
         <div class="grid3">
           <button class="btn" id="pdfEmail">Email</button>
           <button class="btn" id="pdfShare">Share</button>
@@ -301,6 +302,7 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
       <p class="sub">Expenses, receipt photos and folders are stored on this phone only. Receipts are read on the phone; nothing is uploaded.</p>
       <div class="grid2"><button class="btn" id="csvBtn">Export CSV</button><button class="btn danger" id="wipeBtn">Delete all data</button></div>
     </div>
+    <p class="sub" style="text-align:center">App version 1.7 · 27 Oct 2026</p>
   </section>
 </main>
 
@@ -711,6 +713,14 @@ $("#pdfEmail").onclick=async()=>{
 };
 $("#pdfShare").onclick=async()=>{ if(!pdf.file) return; try{ await navigator.share({files:[pdf.file]}); afterSend(); }catch(e){ if(e.name!=="AbortError") toast("Sharing failed. Use Download."); } };
 $("#pdfDl").onclick=()=>{ if(pdf.file){ download(pdf.file); afterSend(); } };
+/* Open: show the PDF in the phone's viewer (new tab); if the browser blocks that, download it so it opens from the notification */
+$("#pdfOpen").onclick=()=>{
+  if(!pdf.file) return;
+  const url=URL.createObjectURL(pdf.file);
+  const w=window.open(url,"_blank");
+  if(!w){ download(pdf.file); toast("PDF downloaded. Open it from your notifications or Downloads."); }
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+};
 
 /* ---------- Scan + review ---------- */
 let editing=null, photo=null, claimTouched=false, scanToken=0, scanFolder="";
