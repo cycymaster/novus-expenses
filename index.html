@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
-/* Layout: white logo header + navy strip; In progress / Scan / Sent tab bar; one-screen review form after each scan */
+/* Layout: white logo header + navy strip; Expenses / Scan / Folders tab bar; folder detail with status + PDF; bulk-select bar */
 :root{
   --navy:#093C71; --steel:#97A4AF;
   --bg:#F2F4F6; --surface:#FFFFFF; --line:#DCE1E6; --muted:#6B7884; --fg:#0B2238;
@@ -37,7 +37,7 @@
   --auto:#12304F; --auto-line:#3E6894; --strip:#0C2540; --strip-fg:#E8EDF2; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
-body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-ui);-webkit-font-smoothing:antialiased;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-ui);-webkit-font-smoothing:antialiased;padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 [hidden]{display:none!important}
 button,input,select,textarea{font:inherit;color:inherit}
 .wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -51,55 +51,79 @@ header.top .bar{display:flex;align-items:center;justify-content:space-between;ga
 .strip span:last-child{opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 
 main .wrap{padding-block:18px;display:flex;flex-direction:column;gap:14px}
-h2{font-size:22px;margin:0;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:22px;margin:0;letter-spacing:-.015em;text-wrap:balance;min-width:0;overflow-wrap:anywhere}
 .sub{color:var(--muted);font-size:13px;margin:0}
 .label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
 .stack{display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;align-items:center}
 .between{justify-content:space-between}
+.wrapflex{flex-wrap:wrap}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media (max-width:340px){.grid2{grid-template-columns:1fr}}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none;min-width:0}
-textarea{min-height:60px;resize:vertical}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .auto{background:var(--auto);border-color:var(--auto-line)}
 .autotag{font-size:9.5px;letter-spacing:.08em;font-weight:700;color:var(--accent);margin-left:6px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.danger{color:var(--bad)}
 .btn.small{padding:7px 12px;font-size:13px}
 .btn.block{width:100%}
-.btn.big{padding:16px;font-size:16px;border-radius:14px}
+.btn.big{padding:15px;font-size:16px;border-radius:14px}
+.btn.ghost{background:none;border-color:transparent;padding-inline:4px;color:var(--accent)}
 .btn:disabled{opacity:.45;cursor:default}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
-/* In progress summary */
-.hero{background:#093C71;color:#fff;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px}
-.hero .label{color:rgba(255,255,255,.7)}
-.hero .total{font-family:var(--f-num);font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.hero .meta{font-size:13px;opacity:.8}
-.hero .btn{background:#fff;color:#093C71;border-color:#fff}
-.hero .btn:disabled{opacity:.55}
-.notice{display:flex;gap:10px;align-items:flex-start;border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent);color:var(--fg);border-radius:12px;padding:10px 12px;font-size:13px}
+/* status pills + segmented control */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.pending{color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.pill.sent{color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.pill.paid{color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--chip);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:none;border-radius:9px;padding:10px 4px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"].pending{background:var(--surface);color:var(--warn);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button[aria-pressed="true"].sent{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button[aria-pressed="true"].paid{background:var(--surface);color:var(--good);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+.summary{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.total{font-family:var(--f-num);font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.notice{display:flex;gap:10px;align-items:flex-start;border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:12px;padding:10px 12px;font-size:13px}
 .notice b{color:var(--warn)}
 
+/* expense rows */
 .list{display:flex;flex-direction:column;gap:10px}
 .day{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
 .exp{display:grid;grid-template-columns:52px minmax(0,1fr) 104px;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px 10px 10px;cursor:pointer;position:relative;text-align:left;width:100%}
 .exp::after{content:"";position:absolute;right:116px;top:8px;bottom:8px;border-left:1.5px dashed var(--line)}
-.thumb{width:52px;height:52px;border-radius:10px;background:var(--chip);background-size:cover;background-position:center;display:grid;place-items:center;font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.exp.picked{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.thumb{width:52px;height:52px;border-radius:10px;background:var(--chip);background-size:cover;background-position:center;display:grid;place-items:center;font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase;position:relative}
+.check{position:absolute;inset:-4px auto auto -4px;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.exp.picked .check{background:var(--accent);border-color:var(--accent)}
+.exp.picked .check::after{content:"";width:9px;height:5px;border:2.2px solid var(--accent-ink);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
 .exp .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .exp .meta small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .amt{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600;font-size:14px}
 .amt small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.04em}
 .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:5px;margin-right:6px;vertical-align:1px}
-.tag.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
 .tag.warn{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
 .tag.sample{background:var(--chip);color:var(--muted)}
-.empty{text-align:center;padding:32px 18px;display:flex;flex-direction:column;gap:12px;align-items:center}
+.empty{text-align:center;padding:30px 18px;display:flex;flex-direction:column;gap:12px;align-items:center}
 
-/* Review screen */
+/* folder cards */
+.fold{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;text-align:left;width:100%}
+.fold .ico{width:44px;height:44px;border-radius:12px;background:var(--chip);color:var(--accent);display:grid;place-items:center}
+.fold b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fold small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fold .right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.fold .right span.v{font-family:var(--f-num);font-weight:600;font-size:13.5px;white-space:nowrap}
+
+/* review */
 .receipt{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;align-items:center}
 .receipt .pic{width:96px;height:120px;border-radius:12px;background:var(--chip);background-size:cover;background-position:center;border:1px solid var(--line);cursor:pointer;display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center;padding:6px}
 .status{display:flex;gap:10px;align-items:center;font-size:14px;font-weight:600}
@@ -109,24 +133,18 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .amount-in{font-family:var(--f-num);font-size:20px;font-weight:600}
 .conv{background:var(--chip);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
 
-/* Sent */
-.rep{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;text-align:left;width:100%}
-.rep .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
-.rep .no{font-family:var(--f-num);font-weight:600;font-size:13.5px;color:var(--accent)}
-.rep .tot{font-family:var(--f-num);font-weight:600;white-space:nowrap}
 .stat{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-block:8px;border-bottom:1px solid var(--line)}
 .stat:last-child{border-bottom:0}
 .stat .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
-.mini{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;font-size:13px;padding-block:7px;border-bottom:1px solid var(--line)}
-.mini:last-child{border-bottom:0}
-.mini span:last-child{font-family:var(--f-num);white-space:nowrap}
-.mini span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.steps{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;display:flex;flex-direction:column;gap:4px}
-
+.pdfname{font-family:var(--f-num);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .rates{display:flex;flex-direction:column;gap:8px}
 .rate{display:grid;grid-template-columns:90px minmax(0,1fr) 40px;gap:8px;align-items:center}
 .rate input{font-family:var(--f-num)}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer}
+.opt b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.opt[aria-current="true"]{border-color:var(--accent)}
 
+/* bottom bars */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs .wrap{display:grid;grid-template-columns:repeat(3,1fr);align-items:end}
 nav.tabs button{background:none;border:0;padding:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;position:relative}
@@ -136,11 +154,19 @@ nav.tabs .scan{margin-top:-20px}
 nav.tabs .scan span.plus{width:58px;height:58px;border-radius:18px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 18px rgba(9,60,113,.3)}
 nav.tabs .scan span.plus svg{width:28px;height:28px}
 .badge{position:absolute;top:4px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:10.5px;display:grid;place-items:center;padding:0 5px}
+.selbar{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom,0px));z-index:7}
+.selbar .wrap{display:flex;align-items:center;gap:8px;background:#0B2238;color:#fff;border-radius:16px;padding:10px 10px 10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.selbar .wrap{margin-inline:max(12px,env(safe-area-inset-left,0px))}
+@media (min-width:664px){.selbar .wrap{margin-inline:auto}}
+.selbar span{flex:1;font-weight:600;font-size:14px;min-width:0}
+.selbar .btn{padding:9px 12px;font-size:13.5px}
+.selbar .btn.light{background:#fff;color:#093C71;border-color:#fff}
+.selbar .btn.dark{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom,0px));background:#093C71;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:calc(100% - 32px);display:flex;gap:12px;align-items:center}
-.toast button{background:none;border:0;color:#BFD3EA;font-weight:700;cursor:pointer;padding:0}
+.toast button{background:none;border:0;color:#BFD3EA;font-weight:700;cursor:pointer;padding:0;white-space:nowrap}
 .modal{position:fixed;inset:0;background:rgba(5,15,30,.55);z-index:30;display:grid;align-items:end}
-.sheet{background:var(--surface);border-radius:18px 18px 0 0;padding:20px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:14px;max-width:640px;width:100%;margin:0 auto}
+.sheet{background:var(--surface);border-radius:18px 18px 0 0;padding:20px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:12px;max-width:640px;width:100%;margin:0 auto}
 .sheet img{border-radius:12px;width:100%}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
 </style>
@@ -155,23 +181,19 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
 </header>
 
 <input id="fileCam" type="file" accept="image/*" capture="environment" hidden>
-<input id="fileLib" type="file" accept="image/*" hidden>
 
 <main>
-  <!-- IN PROGRESS -->
-  <section id="v-home" class="wrap">
-    <div class="hero">
-      <span class="label">Current report · in progress</span>
-      <div class="total" id="curTotal">—</div>
-      <div class="meta" id="curMeta"></div>
-      <button class="btn big block" id="sendBtn">Send report</button>
-    </div>
-    <div class="notice" id="curNotice" hidden></div>
-    <div class="row between"><b>Expenses in this report</b><button class="btn small" id="manualBtn">Add without receipt</button></div>
-    <div class="list" id="list"></div>
+  <!-- EXPENSES (unfiled) -->
+  <section id="v-inbox" class="wrap">
+    <div class="row between"><div><h2>Expenses</h2><p class="sub">Not in a folder yet</p></div>
+      <button class="btn small" id="inboxSelect">Select</button></div>
+    <div class="card summary" id="inboxSum"></div>
+    <div class="notice" id="inboxNotice" hidden></div>
+    <div class="list" id="inboxList"></div>
+    <button class="btn small" id="manualBtn" style="align-self:center">Add an expense without receipt</button>
   </section>
 
-  <!-- REVIEW (after scan, or edit) -->
+  <!-- REVIEW -->
   <section id="v-review" class="wrap" hidden>
     <div class="row between"><h2 id="revTitle">Check the details</h2><button class="btn small" id="revCancel">Cancel</button></div>
     <div class="card receipt">
@@ -202,17 +224,60 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
         <div class="field"><label class="label" for="f-cat">Category<span class="autotag" data-for="f-cat" hidden>READ</span></label><select id="f-cat"></select></div>
       </div>
       <div class="field"><label class="label" for="f-merchant">Merchant<span class="autotag" data-for="f-merchant" hidden>READ</span></label><input id="f-merchant" placeholder="e.g. Ritz-Carlton DIFC" autocomplete="off"></div>
+      <div class="field"><label class="label" for="f-folder">Folder</label><select id="f-folder"></select></div>
       <div class="row">
         <button type="button" class="btn danger" id="delBtn" hidden>Delete</button>
-        <button type="submit" class="btn primary block big" id="saveBtn">Add to report</button>
+        <button type="submit" class="btn primary block big" id="saveBtn">Save expense</button>
       </div>
     </form>
   </section>
 
-  <!-- SENT -->
-  <section id="v-sent" class="wrap" hidden>
-    <div><h2>Sent reports</h2><p class="sub">Reports you have emailed to accounting. Their expenses are locked.</p></div>
-    <div class="list" id="sentList"></div>
+  <!-- FOLDERS -->
+  <section id="v-folders" class="wrap" hidden>
+    <div class="row between"><div><h2>Folders</h2><p class="sub">One folder per report, e.g. Oct 2026</p></div>
+      <button class="btn small primary" id="newFolderBtn">New folder</button></div>
+    <div class="chips" id="folderChips">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="pending" aria-pressed="false">Pending</button>
+      <button class="chip" data-f="sent" aria-pressed="false">Sent</button>
+      <button class="chip" data-f="paid" aria-pressed="false">Paid</button>
+    </div>
+    <div class="list" id="folderList"></div>
+  </section>
+
+  <!-- FOLDER DETAIL -->
+  <section id="v-folder" class="wrap" hidden>
+    <div class="row between"><button class="btn ghost" id="fBack">‹ Folders</button>
+      <div class="row"><button class="btn small" id="fSelect">Select</button><button class="btn small" id="fMenu" aria-label="Folder options">•••</button></div></div>
+    <div class="stack" style="gap:4px"><h2 id="fName"></h2><p class="sub" id="fNo"></p></div>
+    <div class="card stack">
+      <div class="summary"><div><span class="label">Total</span><div class="total" id="fTotal"></div></div><span class="sub" id="fMeta"></span></div>
+      <div class="stack" style="gap:8px">
+        <span class="label">Status <span style="text-transform:none;letter-spacing:0;font-weight:400">· set it yourself</span></span>
+        <div class="seg" id="fSeg">
+          <button class="pending" data-s="pending">Pending</button>
+          <button class="sent" data-s="sent">Sent</button>
+          <button class="paid" data-s="paid">Paid</button>
+        </div>
+        <p class="sub" id="fStatusNote"></p>
+      </div>
+    </div>
+    <div class="notice" id="fNotice" hidden></div>
+    <div class="card stack" id="fPdf">
+      <div class="row between"><span class="label">Expense report PDF</span><span class="sub" id="pdfSize"></span></div>
+      <button class="btn primary big block" id="pdfMake">Create PDF</button>
+      <div class="stack" id="pdfReady" hidden style="gap:10px">
+        <div class="pdfname" id="pdfName"></div>
+        <div class="grid3">
+          <button class="btn" id="pdfEmail">Email</button>
+          <button class="btn" id="pdfShare">Share</button>
+          <button class="btn" id="pdfDl">Download</button>
+        </div>
+        <div class="row between" id="pdfMark" hidden><span class="sub">Sent it to accounting?</span><button class="btn small primary" id="pdfMarkBtn">Mark as Sent</button></div>
+      </div>
+    </div>
+    <div class="row between"><b>Expenses in this folder</b><button class="btn small" id="fScan">Scan into folder</button></div>
+    <div class="list" id="fList"></div>
   </section>
 
   <!-- PROFILE -->
@@ -230,17 +295,24 @@ nav.tabs .scan span.plus svg{width:28px;height:28px}
     </div>
     <div class="card stack">
       <span class="label">Data</span>
-      <p class="sub">Expenses, receipt photos and reports are stored on this phone only. Receipts are read on the phone; nothing is uploaded.</p>
+      <p class="sub">Expenses, receipt photos and folders are stored on this phone only. Receipts are read on the phone; nothing is uploaded.</p>
       <div class="grid2"><button class="btn" id="csvBtn">Export CSV</button><button class="btn danger" id="wipeBtn">Delete all data</button></div>
     </div>
   </section>
 </main>
 
+<div class="selbar" id="selbar" hidden><div class="wrap">
+  <span id="selCount">0 selected</span>
+  <button class="btn light" id="selMove">Move to…</button>
+  <button class="btn dark" id="selDel">Delete</button>
+  <button class="btn dark" id="selDone">Done</button>
+</div></div>
+
 <nav class="tabs" aria-label="Main">
   <div class="wrap">
-    <button data-v="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>In progress<span class="badge" id="curBadge" hidden></span></button>
+    <button data-v="inbox" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Expenses<span class="badge" id="inboxBadge" hidden></span></button>
     <button data-v="scan" class="scan" aria-label="Scan receipt"><span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>Scan receipt</button>
-    <button data-v="sent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l18-8-8 18-2-8z"/></svg>Sent</button>
+    <button data-v="folders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>Folders</button>
   </div>
 </nav>
 
@@ -333,11 +405,13 @@ const OCR_LIB = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.
 const CURRENCIES = ["AED","USD","EUR","GBP","CHF","SAR","QAR","BHD","KWD","OMR","LBP","EGP","MAD","TND","ETB","MUR","XPF","AZN","THB","INR","SGD","HKD","CNY","JPY","AUD","CAD","TRY","ZAR"];
 const CATS = ["Flight","Hotel","Taxi","Dinner","Lunch","Breakfast","Drink","Coffee","Visa","Car rental","Train","Phone","Conference","Other"];
 const DEFAULT_RATES = {AED:{USD:3.6725,EUR:3.85,GBP:4.9,SAR:0.9793,QAR:1.0089},USD:{AED:0.2723,EUR:1.05,GBP:1.33,SAR:0.2666,QAR:0.2747}};
+const STATUS = {pending:"Pending",sent:"Sent",paid:"Paid"};
+const FOLDER_ICO = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>';
 
-/* ---------- storage (IndexedDB v2 adds the reports store; expenses untouched) ---------- */
+/* ---------- storage: IndexedDB v3 adds `folders`; `reports` (v2) is kept and migrated ---------- */
 let db;
-const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("novus-expenses",2);
-  r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains("expenses"))d.createObjectStore("expenses",{keyPath:"id"});if(!d.objectStoreNames.contains("reports"))d.createObjectStore("reports",{keyPath:"id"})};
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("novus-expenses",3);
+  r.onupgradeneeded=()=>{const d=r.result;for(const n of ["expenses","reports","folders"]) if(!d.objectStoreNames.contains(n)) d.createObjectStore(n,{keyPath:"id"})};
   r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>rej(r.error)});
 const st=(n,m)=>db.transaction(n,m).objectStore(n);
 const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
@@ -347,7 +421,7 @@ let S=Object.assign({name:"",base:"AED",rates:null},ls.get("novus-profile",{}));
 ["dept","mgr","acct","sig"].forEach(k=>delete S[k]);
 if(!S.rates) S.rates={...DEFAULT_RATES[S.base]};
 const saveProfile=()=>ls.set("novus-profile",S);
-let ALL=[], REPORTS=[];
+let ALL=[], FOLDERS=[];
 
 /* ---------- helpers ---------- */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -360,53 +434,56 @@ const claim=e=>e.currency===S.base?e.amount:(isFinite(e.claim)?e.claim:e.amount*
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtDate=d=>{if(!d)return"—";const[y,m,dd]=d.split("-");return `${dd} ${MON[+m-1]} ${y}`};
 const dmmm=d=>{const[,m,dd]=d.split("-");return `${+dd}-${MON[+m-1]}`};
+const monthLabel=d=>{const[y,m]=(d||today()).split("-");return `${MON[+m-1]} ${y}`};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const reasonOf=e=>e.reason??(e.merchant?"":e.desc)??"";
 const merchantOf=e=>e.merchant??"";
 const descOf=e=>[merchantOf(e),reasonOf(e)].filter(Boolean).join(" – ")||e.desc||e.category;
 const fillSelect=(el,arr,val)=>el.innerHTML=arr.map(a=>`<option${a===val?" selected":""}>${a}</option>`).join("");
-const inProgress=()=>ALL.filter(e=>!e.reportId).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
+const byDateDesc=(a,b)=>b.date.localeCompare(a.date)||b.created-a.created;
+const unfiled=()=>ALL.filter(e=>!e.folderId||!FOLDERS.some(f=>f.id===e.folderId)).sort(byDateDesc);
+const inFolder=id=>ALL.filter(e=>e.folderId===id).sort(byDateDesc);
+const folderById=id=>FOLDERS.find(f=>f.id===id);
+const sumOf=rows=>rows.reduce((a,e)=>a+claim(e),0);
 function toast(msg,act,fn){const t=$("#toast");$("#toastMsg").textContent=msg;const b=$("#toastAct");b.hidden=!act;if(act){b.textContent=act;b.onclick=()=>{t.hidden=true;fn()}}
   t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,act?6000:2600)}
 const openSheet=html=>{$("#toast").hidden=true;$("#sheet").innerHTML=html;$("#modal").hidden=false};
 const closeModal=()=>$("#modal").hidden=true;
-$("#modal").onclick=ev=>{if(ev.target.id==="modal"&&!sending)closeModal()};
+$("#modal").onclick=ev=>{if(ev.target.id==="modal"&&!busy)closeModal()};
+let busy=false;
 
 /* ---------- navigation ---------- */
-let view="home";
+let view="inbox", openFolderId=null, returnTo="inbox";
 function show(v){
-  view=v;
+  view=v; endSelect();
   $$("main section").forEach(s=>s.hidden=s.id!=="v-"+v);
-  $$("nav.tabs button").forEach(b=>b.dataset.v===v?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));
-  if(v==="sent") renderSent();
+  const tab=v==="folder"?"folders":v;
+  $$("nav.tabs button").forEach(b=>b.dataset.v===tab?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));
+  if(v==="inbox") renderInbox();
+  if(v==="folders") renderFolders();
+  if(v==="folder") renderFolder();
   if(v==="profile") fillProfile();
   window.scrollTo(0,0);
 }
-$$("nav.tabs button").forEach(b=>b.onclick=()=>{ if(b.dataset.v==="scan") return startScan(); show(b.dataset.v); });
+$$("nav.tabs button").forEach(b=>b.onclick=()=>{
+  if(b.dataset.v==="scan") return startScan(view==="folder"?openFolderId:"");
+  show(b.dataset.v);
+});
 $("#profileBtn").onclick=()=>show("profile");
-$("#profDone").onclick=()=>show("home");
+$("#profDone").onclick=()=>show("inbox");
 
-/* ---------- In progress ---------- */
+/* ---------- duplicates ---------- */
 let DUP=new Set();
 function findDups(){DUP=new Set();const by={};for(const e of ALL){const k=e.currency+"|"+e.amount;(by[k]=by[k]||[]).push(e)}
   for(const g of Object.values(by)) if(g.length>1) for(const a of g) for(const b of g) if(a!==b&&Math.abs(new Date(a.date)-new Date(b.date))<=7*864e5){DUP.add(a.id);DUP.add(b.id)}}
-function renderHome(){
-  $("#whoLine").textContent=S.name||"Set up your profile";
-  const rows=inProgress(), tot=rows.reduce((a,e)=>a+claim(e),0);
-  $("#curTotal").textContent=fmt(tot,S.base);
-  const dates=rows.map(e=>e.date).sort();
-  $("#curMeta").textContent=rows.length?`${rows.length} expense${rows.length>1?"s":""} · ${fmtDate(dates[0])} – ${fmtDate(dates[dates.length-1])}`:"No expenses yet. Tap Scan receipt to add the first one.";
-  $("#sendBtn").disabled=!rows.length;
-  $("#curBadge").hidden=!rows.length; $("#curBadge").textContent=rows.length;
+function issuesHtml(rows){
   const noR=rows.filter(e=>!reasonOf(e)).length, noP=rows.filter(e=>!e.photo).length, dup=rows.filter(e=>DUP.has(e.id)).length;
-  const issues=[noR&&`<b>${noR}</b> without a reason`,noP&&`<b>${noP}</b> without a receipt photo`,dup&&`<b>${dup}</b> possible duplicate${dup>1?"s":""}`].filter(Boolean);
-  $("#curNotice").hidden=!issues.length; $("#curNotice").innerHTML=issues.length?`<span>Check before sending: ${issues.join(" · ")}. Tap an expense to fix it.</span>`:"";
-  const L=$("#list");
-  if(!rows.length){
-    L.innerHTML=`<div class="card empty"><b>Your report is empty</b><p class="sub">Photograph a receipt: the amount, date and merchant are read automatically. You add the reason.</p>
-      <button class="btn primary" id="emptyScan">Scan a receipt</button>${ALL.length?"":`<button class="btn small" id="sampleBtn">Or load a sample trip to try</button>`}</div>`;
-    $("#emptyScan").onclick=startScan; const sb=$("#sampleBtn"); if(sb) sb.onclick=loadSamples; return;
-  }
+  const parts=[noR&&`<b>${noR}</b> without a reason`,noP&&`<b>${noP}</b> without a receipt photo`,dup&&`<b>${dup}</b> possible duplicate${dup>1?"s":""}`].filter(Boolean);
+  return parts.length?`<span>Check: ${parts.join(" · ")}. Tap an expense to fix it.</span>`:"";
+}
+
+/* ---------- expense rows (shared by Expenses and folder views) ---------- */
+function rowsHtml(rows){
   let html="",last="";
   for(const e of rows){
     if(e.date!==last){html+=`<div class="day">${fmtDate(e.date)}</div>`;last=e.date}
@@ -415,97 +492,283 @@ function renderHome(){
     if(!e.photo) tags.push('<span class="tag warn">No receipt</span>');
     if(DUP.has(e.id)) tags.push('<span class="tag warn">Possible duplicate</span>');
     if(e.sample) tags.push('<span class="tag sample">Sample</span>');
-    html+=`<button class="exp" data-id="${e.id}">
-      <div class="thumb" style="${e.photo?`background-image:url(${e.photo})`:""}">${e.photo?"":esc(e.category.slice(0,4))}</div>
+    html+=`<button class="exp${SEL.has(e.id)?" picked":""}" data-id="${e.id}">
+      <div class="thumb" style="${e.photo?`background-image:url(${e.photo})`:""}">${e.photo?"":esc(e.category.slice(0,4))}${selMode?'<span class="check"></span>':""}</div>
       <div class="meta"><b>${esc(reasonOf(e)||merchantOf(e)||e.category)}</b>
         <small>${esc([e.category,merchantOf(e)&&reasonOf(e)?merchantOf(e):""].filter(Boolean).join(" · "))}</small>
         <small>${tags.join("")||'<span style="color:var(--good)">Ready</span>'}</small></div>
       <div class="amt">${fmt(claim(e))}<small>${S.base}</small>${foreign?`<small>${fmt(e.amount)} ${e.currency}</small>`:""}</div>
     </button>`;
   }
-  L.innerHTML=html;
-  $$("#list .exp").forEach(b=>b.onclick=()=>openReview(ALL.find(x=>x.id===b.dataset.id)));
+  return html;
+}
+function bindRows(container){
+  $$(container+" .exp").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.id;
+    if(selMode){ SEL.has(id)?SEL.delete(id):SEL.add(id); b.classList.toggle("picked",SEL.has(id)); updateSelbar(); return; }
+    openReview(ALL.find(x=>x.id===id));
+  });
 }
 
+/* ---------- Expenses (unfiled) ---------- */
+function renderHeader(){
+  $("#whoLine").textContent=S.name||"Set up your profile";
+  const n=unfiled().length; $("#inboxBadge").hidden=!n; $("#inboxBadge").textContent=n;
+}
+function renderInbox(){
+  renderHeader();
+  const rows=unfiled(), tot=sumOf(rows);
+  $("#inboxSelect").hidden=!rows.length;
+  $("#inboxSum").innerHTML=rows.length
+    ?`<div><span class="label">Unfiled total</span><div class="total">${fmt(tot,S.base)}</div></div><span class="sub">${rows.length} expense${rows.length>1?"s":""}<br>Select them to move into a folder</span>`
+    :`<div><span class="label">Unfiled total</span><div class="total">${fmt(0,S.base)}</div></div><span class="sub">Everything is filed</span>`;
+  const iss=issuesHtml(rows); $("#inboxNotice").hidden=!iss; $("#inboxNotice").innerHTML=iss;
+  const L=$("#inboxList");
+  if(!rows.length){
+    L.innerHTML=`<div class="card empty"><b>No unfiled expenses</b><p class="sub">Tap <b>Scan receipt</b>. The amount, date and merchant are read automatically; you add the reason. File expenses into folders like ${esc(monthLabel())} when you're ready.</p>
+      ${ALL.length?"":`<button class="btn small" id="sampleBtn">Load a sample trip to try</button>`}</div>`;
+    const sb=$("#sampleBtn"); if(sb) sb.onclick=loadSamples; return;
+  }
+  L.innerHTML=rowsHtml(rows); bindRows("#inboxList");
+}
+
+/* ---------- selection ---------- */
+let selMode=false, SEL=new Set();
+function startSelect(){ $("#toast").hidden=true; selMode=true; SEL=new Set(); rerender(); updateSelbar(); }
+function endSelect(){ if(!selMode) return; selMode=false; SEL=new Set(); $("#selbar").hidden=true; $("#inboxSelect").textContent="Select"; $("#fSelect").textContent="Select"; }
+function updateSelbar(){ $("#selbar").hidden=!selMode; $("#selCount").textContent=`${SEL.size} selected`; $("#selMove").disabled=!SEL.size; $("#selDel").disabled=!SEL.size; }
+function rerender(){ if(view==="inbox") renderInbox(); if(view==="folder") renderFolder(); }
+$("#inboxSelect").onclick=()=>{ if(selMode){endSelect();renderInbox()} else {startSelect();$("#inboxSelect").textContent="Cancel"} };
+$("#fSelect").onclick=()=>{ if(selMode){endSelect();renderFolder()} else {startSelect();$("#fSelect").textContent="Cancel"} };
+$("#selDone").onclick=()=>{ endSelect(); rerender(); };
+$("#selMove").onclick=()=>openMove([...SEL]);
+$("#selDel").onclick=()=>confirmDelete([...SEL]);
+
+/* ---------- move + delete ---------- */
+function suggestName(){ const base=monthLabel(); if(!FOLDERS.some(f=>f.name===base)) return base;
+  let i=2; while(FOLDERS.some(f=>f.name===`${base} (${i})`)) i++; return `${base} (${i})`; }
+function nextNo(){
+  const ini=(S.name||"XX").split(/\s+/).filter(Boolean).map(w=>w[0]).join("").toUpperCase().slice(0,3);
+  const ym=today().slice(2,7).replace("-",""); const n=FOLDERS.filter(f=>(f.no||"").includes(`-${ym}-`)).length+1;
+  return `EXP-${ini}-${ym}-${String(n).padStart(2,"0")}`;
+}
+async function createFolder(name){
+  const f={id:uid(),name:name.trim()||suggestName(),no:nextNo(),status:"pending",statusAt:{pending:Date.now()},created:Date.now()};
+  await put("folders",f); FOLDERS.push(f); return f;
+}
+function folderOptionsHtml(current){
+  const fs=[...FOLDERS].sort((a,b)=>b.created-a.created);
+  return `<button class="opt" data-to="" aria-current="${!current}"><b>Expenses</b><span class="sub">No folder</span></button>`+
+    fs.map(f=>`<button class="opt" data-to="${f.id}" aria-current="${current===f.id}"><b>${esc(f.name)}</b><span class="pill ${f.status}">${STATUS[f.status]}</span></button>`).join("");
+}
+function openMove(ids){
+  if(!ids.length) return;
+  const cur=ids.every(id=>ALL.find(e=>e.id===id)?.folderId===ALL.find(e=>e.id===ids[0])?.folderId)?(ALL.find(e=>e.id===ids[0])?.folderId||""):null;
+  openSheet(`<div class="row between"><b style="font-size:18px">Move ${ids.length} expense${ids.length>1?"s":""} to…</b><button class="btn small" id="mClose">Cancel</button></div>
+    <div class="stack" style="gap:8px">${folderOptionsHtml(cur)}</div>
+    <div class="card stack" style="padding:12px;gap:10px"><span class="label">New folder</span>
+      <div class="row"><input id="mNew" value="${esc(suggestName())}" aria-label="New folder name"><button class="btn primary" id="mCreate">Create &amp; move</button></div></div>`);
+  $("#mClose").onclick=closeModal;
+  $$("#sheet .opt").forEach(b=>b.onclick=()=>doMove(ids,b.dataset.to));
+  $("#mCreate").onclick=async()=>{ const f=await createFolder($("#mNew").value); await doMove(ids,f.id); };
+}
+async function doMove(ids,to){
+  for(const id of ids){ const e=ALL.find(x=>x.id===id); if(!e) continue; if(to) e.folderId=to; else delete e.folderId; delete e.reportId; await put("expenses",e); }
+  closeModal(); endSelect(); await reload();
+  const f=folderById(to);
+  toast(`${ids.length} moved to ${f?f.name:"Expenses"}`, f&&view!=="folder"?"Open":null, ()=>openFolder(f.id));
+}
+function confirmDelete(ids){
+  if(!ids.length) return;
+  const tot=sumOf(ALL.filter(e=>ids.includes(e.id)));
+  openSheet(`<b style="font-size:18px">Delete ${ids.length} expense${ids.length>1?"s":""}?</b><p class="sub">${fmt(tot,S.base)} and the receipt photo${ids.length>1?"s":""} will be removed from this phone. This can't be undone.</p>
+    <div class="grid2"><button class="btn" id="cNo">Keep</button><button class="btn" id="cYes" style="background:var(--bad);border-color:var(--bad);color:#fff">Delete</button></div>`);
+  $("#cNo").onclick=closeModal;
+  $("#cYes").onclick=async()=>{ for(const id of ids) await del("expenses",id); closeModal(); endSelect(); await reload(); toast(`${ids.length} deleted`); if(view==="review") back(); };
+}
+
+/* ---------- Folders ---------- */
+let folderFilter="all";
+$$("#folderChips .chip").forEach(c=>c.onclick=()=>{folderFilter=c.dataset.f;$$("#folderChips .chip").forEach(x=>x.setAttribute("aria-pressed",x===c));renderFolders()});
+function renderFolders(){
+  renderHeader();
+  const fs=[...FOLDERS].filter(f=>folderFilter==="all"||f.status===folderFilter).sort((a,b)=>b.created-a.created);
+  const L=$("#folderList");
+  if(!FOLDERS.length){ L.innerHTML=`<div class="card empty"><b>No folders yet</b><p class="sub">Create a folder for each report, for example ${esc(monthLabel())}. Move expenses into it, create the PDF, and track it as Pending, Sent or Paid.</p>
+    <button class="btn primary" id="emptyNew">Create ${esc(suggestName())}</button></div>`; $("#emptyNew").onclick=newFolderFlow; return; }
+  if(!fs.length){ L.innerHTML=`<div class="card empty"><p class="sub">No ${STATUS[folderFilter].toLowerCase()} folders.</p></div>`; return; }
+  L.innerHTML=fs.map(f=>{ const rows=inFolder(f.id); const ds=rows.map(e=>e.date).sort();
+    return `<button class="fold" data-id="${f.id}"><div class="ico">${FOLDER_ICO}</div>
+      <div style="min-width:0"><b>${esc(f.name)}</b><small>${rows.length} expense${rows.length===1?"":"s"}${ds.length?` · ${dmmm(ds[0])} – ${dmmm(ds[ds.length-1])}`:""}</small></div>
+      <div class="right"><span class="pill ${f.status}">${STATUS[f.status]}</span><span class="v">${fmt(sumOf(rows),S.base)}</span></div></button>`; }).join("");
+  $$("#folderList .fold").forEach(b=>b.onclick=()=>openFolder(b.dataset.id));
+}
+function newFolderFlow(){
+  openSheet(`<b style="font-size:18px">New folder</b>
+    <div class="field"><label class="label" for="nfName">Name</label><input id="nfName" value="${esc(suggestName())}"></div>
+    <p class="sub">Tip: one folder per month or per trip.</p>
+    <div class="grid2"><button class="btn" id="cNo">Cancel</button><button class="btn primary" id="cYes">Create</button></div>`);
+  $("#cNo").onclick=closeModal;
+  $("#cYes").onclick=async()=>{ const f=await createFolder($("#nfName").value); closeModal(); await reload(); openFolder(f.id); toast(`${f.name} created`); };
+}
+$("#newFolderBtn").onclick=newFolderFlow;
+function openFolder(id){ openFolderId=id; show("folder"); }
+$("#fBack").onclick=()=>show("folders");
+
+/* ---------- Folder detail ---------- */
+let pdf={folderId:null,sig:"",file:null};
+const sigOf=rows=>rows.map(e=>[e.id,e.amount,e.currency,claim(e),e.date,descOf(e),e.category,e.photo?e.photo.length:0].join("~")).join("|")+"#"+S.name+S.base;
+function renderFolder(){
+  const f=folderById(openFolderId); if(!f){ show("folders"); return; }
+  renderHeader();
+  const rows=inFolder(f.id), ds=rows.map(e=>e.date).sort();
+  $("#fName").textContent=f.name; $("#fNo").textContent=f.no||"";
+  $("#fTotal").textContent=fmt(sumOf(rows),S.base);
+  $("#fMeta").innerHTML=`${rows.length} expense${rows.length===1?"":"s"}${ds.length?`<br>${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:""}`;
+  $$("#fSeg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.s===f.status));
+  const at=f.statusAt?.[f.status]; $("#fStatusNote").textContent=`${STATUS[f.status]}${at?" since "+fmtDate(isoOf(new Date(at))):""}. The app isn't linked to accounting, so update this yourself.`;
+  const iss=issuesHtml(rows);
+  const changed=f.status!=="pending"&&f.pdfSig&&f.pdfSig!==sigOf([...rows].sort((a,b)=>a.date.localeCompare(b.date)));
+  $("#fNotice").hidden=!(iss||changed);
+  $("#fNotice").innerHTML=(changed?`<span><b>Changed after it was marked ${STATUS[f.status]}.</b> Create the PDF again and resend if accounting needs the update.</span>`:"")+(iss&&!changed?iss:"");
+  $("#fSelect").hidden=!rows.length;
+  const sig=sigOf([...rows].sort((a,b)=>a.date.localeCompare(b.date)));
+  if(pdf.folderId!==f.id||pdf.sig!==sig){ pdf={folderId:null,sig:"",file:null}; }
+  $("#pdfMake").disabled=!rows.length; $("#pdfMake").hidden=!!pdf.file; $("#pdfReady").hidden=!pdf.file;
+  $("#pdfMake").textContent=rows.length?"Create PDF":"Add expenses to create the PDF";
+  $("#pdfSize").textContent=pdf.file?(pdf.file.size/1048576).toFixed(1)+" MB":"";
+  $("#pdfShare").hidden=!(pdf.file&&canShareFile(pdf.file));
+  $("#fPdf .grid3").style.gridTemplateColumns=$("#pdfShare").hidden?"1fr 1fr":"";
+  $("#pdfMark").hidden=true;
+  const L=$("#fList");
+  if(!rows.length){ L.innerHTML=`<div class="card empty"><b>This folder is empty</b><p class="sub">Go to <b>Expenses</b>, tap <b>Select</b>, pick expenses and move them here. Or scan a receipt straight into this folder.</p></div>`; return; }
+  L.innerHTML=rowsHtml(rows); bindRows("#fList");
+}
+$$("#fSeg button").forEach(b=>b.onclick=async()=>{ await setStatus(openFolderId,b.dataset.s); });
+async function setStatus(id,s){
+  const f=folderById(id); if(!f||f.status===s) return;
+  f.status=s; f.statusAt=Object.assign({},f.statusAt,{[s]:Date.now()});
+  if(s==="sent"&&pdf.folderId===id) f.pdfSig=pdf.sig;
+  await put("folders",f); await reload(); toast(`${f.name} marked ${STATUS[s]}`);
+}
+$("#fScan").onclick=()=>startScan(openFolderId);
+$("#fMenu").onclick=()=>{
+  const f=folderById(openFolderId); if(!f) return; const n=inFolder(f.id).length;
+  openSheet(`<b style="font-size:18px">${esc(f.name)}</b>
+    <div class="field"><label class="label" for="rnName">Rename</label><div class="row"><input id="rnName" value="${esc(f.name)}"><button class="btn primary" id="rnSave">Save</button></div></div>
+    <button class="btn danger block" id="fDel">Delete folder</button>
+    <p class="sub">Deleting the folder moves its ${n} expense${n===1?"":"s"} back to Expenses. Nothing else is lost.</p>
+    <button class="btn block" id="cNo">Close</button>`);
+  $("#cNo").onclick=closeModal;
+  $("#rnSave").onclick=async()=>{ const v=$("#rnName").value.trim(); if(!v) return; f.name=v; await put("folders",f); closeModal(); await reload(); toast("Folder renamed"); };
+  $("#fDel").onclick=async()=>{ for(const e of inFolder(f.id)){ delete e.folderId; await put("expenses",e);} await del("folders",f.id); closeModal(); await reload(); show("folders"); toast(`${f.name} deleted · ${n} expense${n===1?"":"s"} back in Expenses`); };
+};
+
+/* PDF actions */
+const canShareFile=file=>!!(navigator.canShare&&navigator.canShare({files:[file]}));
+const folderRowsAsc=id=>inFolder(id).sort((a,b)=>a.date.localeCompare(b.date)||a.created-b.created);
+const subjectLine=(f,rows)=>`Expense report ${f.name} (${f.no}) – ${S.name} – ${fmt(sumOf(rows),S.base)}`;
+const bodyText=(f,rows)=>{const ds=rows.map(e=>e.date).sort();return `Hello,\n\nPlease find attached my expense report "${f.name}" (${f.no}) for ${fmtDate(ds[0])} to ${fmtDate(ds[ds.length-1])}: ${rows.length} expense(s), grand total ${fmt(sumOf(rows),S.base)}, receipts included.\n\nBest regards,\n${S.name}`};
+function download(file){const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+$("#pdfMake").onclick=async()=>{
+  if(!S.name){toast("Add your name in Profile first.");show("profile");return}
+  if(!window.jspdf){toast("PDF engine not loaded. Connect to the internet and reopen the app.");return}
+  const f=folderById(openFolderId), rows=folderRowsAsc(f.id); if(!rows.length) return;
+  const b=$("#pdfMake"); b.disabled=true; b.textContent="Creating PDF…"; busy=true;
+  try{ const {blob,name}=await buildPDF(rows,f); pdf={folderId:f.id,sig:sigOf(rows),file:new File([blob],name,{type:"application/pdf"})};
+    $("#pdfName").textContent=name; renderFolder(); }
+  catch(err){ console.error(err); toast("Could not create the PDF. Try again."); b.disabled=false; b.textContent="Create PDF"; }
+  busy=false;
+};
+function afterSend(){ const f=folderById(openFolderId); if(f&&f.status==="pending") $("#pdfMark").hidden=false; }
+$("#pdfMarkBtn").onclick=()=>setStatus(openFolderId,"sent");
+$("#pdfEmail").onclick=async()=>{
+  const f=folderById(openFolderId), rows=folderRowsAsc(f.id); if(!pdf.file) return;
+  if(canShareFile(pdf.file)){ try{ await navigator.share({files:[pdf.file],title:subjectLine(f,rows),text:bodyText(f,rows)}); afterSend(); }catch(e){ if(e.name!=="AbortError") toast("Couldn't open email. Use Download."); } }
+  else { download(pdf.file); setTimeout(()=>{ location.href=`mailto:?subject=${encodeURIComponent(subjectLine(f,rows))}&body=${encodeURIComponent(bodyText(f,rows)+"\n\n[Attach "+pdf.file.name+"]")}`; },600); afterSend(); }
+};
+$("#pdfShare").onclick=async()=>{ if(!pdf.file) return; try{ await navigator.share({files:[pdf.file]}); afterSend(); }catch(e){ if(e.name!=="AbortError") toast("Sharing failed. Use Download."); } };
+$("#pdfDl").onclick=()=>{ if(pdf.file){ download(pdf.file); afterSend(); } };
+
 /* ---------- Scan + review ---------- */
-let editing=null, photo=null, claimTouched=false, scanToken=0;
+let editing=null, photo=null, claimTouched=false, scanToken=0, scanFolder="";
 fillSelect($("#f-cat"),CATS,"Other");
-function startScan(){ $("#fileCam").click(); }
-$("#manualBtn").onclick=()=>openReview(null,null);
+function startScan(folderId){ scanFolder=folderId||""; returnTo=view==="folder"?"folder":"inbox"; $("#fileCam").click(); }
+$("#manualBtn").onclick=()=>{ scanFolder=""; returnTo="inbox"; openReview(null,null); };
 $("#retake").onclick=()=>$("#fileCam").click();
-$("#fileCam").onchange=$("#fileLib").onchange=async ev=>{
-  const f=ev.target.files[0]; ev.target.value=""; if(!f) return;
-  let img; try{ img=await compress(f,1600,.72); }catch{ toast("Could not read that image. Try again."); return; }
-  if(view==="review"&&!$("#v-review").hidden){ photo=img; setPic(img); runOCR(img); }
-  else { openReview(null,img); }
+$("#fileCam").onchange=async ev=>{
+  const file=ev.target.files[0]; ev.target.value=""; if(!file) return;
+  let img; try{ img=await compress(file,1600,.72); }catch{ toast("Could not read that image. Try again."); return; }
+  if(view==="review"){ photo=img; setPic(img); runOCR(img); } else openReview(null,img);
 };
 function setPic(src){const p=$("#revPic");p.style.backgroundImage=src?`url(${src})`:"";p.textContent=src?"":"No photo";$("#retake").textContent=src?"Retake photo":"Add photo"}
-$("#revPic").onclick=()=>{ if(photo) openSheet(`<img src="${photo}" alt="Receipt"><button class="btn block" id="cls">Close</button>`),$("#cls").onclick=closeModal; else $("#fileCam").click(); };
+$("#revPic").onclick=()=>{ if(photo){ openSheet(`<img src="${photo}" alt="Receipt"><button class="btn block" id="cls">Close</button>`); $("#cls").onclick=closeModal; } else $("#fileCam").click(); };
 function setAuto(id,on){ const el=$("#"+id); el.classList.toggle("auto",!!on); const t=document.querySelector(`.autotag[data-for="${id}"]`); if(t) t.hidden=!on; }
 ["f-amount","f-currency","f-date","f-cat","f-merchant"].forEach(id=>$("#"+id).addEventListener("input",()=>setAuto(id,false)));
-function lastUsedCurrency(){ return [...ALL].sort((a,b)=>b.created-a.created)[0]?.currency||S.base; }
-
+const lastUsedCurrency=()=>[...ALL].sort((a,b)=>b.created-a.created)[0]?.currency||S.base;
+function fillFolderSelect(val){
+  const fs=[...FOLDERS].sort((a,b)=>b.created-a.created);
+  $("#f-folder").innerHTML=`<option value="">No folder (Expenses list)</option>`+fs.map(f=>`<option value="${f.id}"${f.id===val?" selected":""}>${esc(f.name)} · ${STATUS[f.status]}</option>`).join("")+`<option value="__new">+ New folder…</option>`;
+  $("#f-folder").value=val||""; $("#f-folder").dataset.prev=val||"";
+}
+$("#f-folder").onchange=()=>{
+  const sel=$("#f-folder"); if(sel.value!=="__new"){ sel.dataset.prev=sel.value; return; }
+  sel.value=sel.dataset.prev||"";
+  openSheet(`<b style="font-size:18px">New folder</b><div class="field"><label class="label" for="nf2">Name</label><input id="nf2" value="${esc(suggestName())}"></div>
+    <div class="grid2"><button class="btn" id="cNo">Cancel</button><button class="btn primary" id="cYes">Create</button></div>`);
+  $("#cNo").onclick=closeModal; $("#cYes").onclick=async()=>{ const f=await createFolder($("#nf2").value); closeModal(); fillFolderSelect(f.id); };
+};
 function openReview(e,img){
-  editing=e||null; photo=e?e.photo||null:img||null; claimTouched=false;
+  $("#toast").hidden=true; editing=e||null; photo=e?e.photo||null:img||null; claimTouched=false; if(e) returnTo=view==="folder"?"folder":"inbox";
   $("#form").reset(); ["f-amount","f-currency","f-date","f-cat","f-merchant"].forEach(id=>setAuto(id,false));
   fillSelect($("#f-currency"),CURRENCIES,e?e.currency:lastUsedCurrency());
   $("#f-date").value=e?e.date:today(); $("#f-cat").value=e?(CATS.includes(e.category)?e.category:"Other"):"Other";
   $("#f-reason").value=e?reasonOf(e):""; $("#f-merchant").value=e?merchantOf(e):""; $("#f-amount").value=e?e.amount:"";
+  fillFolderSelect(e?(e.folderId||""):scanFolder);
   setPic(photo);
   $("#revTitle").textContent=e?"Edit expense":"Check the details";
-  $("#saveBtn").textContent=e?"Save changes":"Add to report"; $("#delBtn").hidden=!e;
+  $("#saveBtn").textContent=e?"Save changes":"Save expense"; $("#delBtn").hidden=!e;
   $("#revBar").hidden=true;
   syncConv(!e);
   if(e&&e.currency!==S.base){$("#f-claim").value=r2(claim(e)).toFixed(2);$("#f-rate").value=+(claim(e)/e.amount).toFixed(4);claimTouched=true;updateHint()}
   if(e){ status(""); $("#revHint").textContent=""; }
   else if(img){ runOCR(img); }
   else { status(""); $("#revHint").textContent="No receipt? Enter the details below. You can add a photo later."; }
-  show("review");
+  view="review"; endSelect(); $$("main section").forEach(s=>s.hidden=s.id!=="v-review"); window.scrollTo(0,0);
 }
+function back(){ if(returnTo==="folder"&&folderById(openFolderId)) show("folder"); else show("inbox"); }
 function status(html,spin){ $("#revStatus").innerHTML=(spin?'<span class="spin"></span>':"")+html; }
 
-/* OCR: read the receipt on the phone (Tesseract), then fill the form */
-let ocrWorker=null, ocrLoading=null;
+/* OCR on the phone (Tesseract) */
+let ocrWorker=null, ocrLoading=null, ocrProgress=null;
 function loadOCR(){
   if(ocrLoading) return ocrLoading;
-  ocrLoading=new Promise((res,rej)=>{ if(window.Tesseract) return res(); const s=document.createElement("script"); s.src=OCR_LIB; s.onload=res; s.onerror=()=>{ocrLoading=null;rej(new Error("lib"))}; document.head.appendChild(s); })
+  ocrLoading=new Promise((res,rej)=>{ if(window.Tesseract) return res(); const s=document.createElement("script"); s.src=OCR_LIB; s.onload=res; s.onerror=()=>rej(new Error("lib")); document.head.appendChild(s); })
     .then(async()=>{ if(!ocrWorker) ocrWorker=await Tesseract.createWorker("eng",1,{logger:m=>{ if(m.status==="recognizing text"&&ocrProgress) ocrProgress(m.progress); }}); return ocrWorker; })
     .catch(err=>{ocrLoading=null;throw err});
   return ocrLoading;
 }
-let ocrProgress=null;
 async function runOCR(img){
   const token=++scanToken;
   status("Reading receipt…",true); $("#revHint").textContent="You can type the reason while we read it."; $("#revBar").hidden=false; $("#revBar i").style.width="5%";
   ocrProgress=p=>{ if(token===scanToken) $("#revBar i").style.width=Math.max(5,Math.round(p*100))+"%"; };
-  try{
-    const w=await loadOCR();
-    const {data}=await w.recognize(img);
-    if(token!==scanToken) return;
-    const r=parseReceipt(data.text,new Date());
-    applyRead(r);
-  }catch(err){
-    if(token!==scanToken) return;
-    status("Couldn't read automatically");
-    $("#revHint").textContent=navigator.onLine?"Enter the amount and date from the receipt.":"Reading needs internet the first time. Enter the details by hand.";
-  }
+  try{ const w=await loadOCR(); const {data}=await w.recognize(img); if(token!==scanToken) return; applyRead(parseReceipt(data.text,new Date())); }
+  catch(err){ if(token!==scanToken) return; status("Couldn't read automatically");
+    $("#revHint").textContent=navigator.onLine?"Enter the amount and date from the receipt.":"Reading needs internet the first time. Enter the details by hand."; }
   $("#revBar").hidden=true; ocrProgress=null;
 }
 function applyRead(r){
-  const got=[];
-  const empty=id=>!$("#"+id).value || $("#"+id).classList.contains("auto");
-  if(r.amount&&empty("f-amount")){ $("#f-amount").value=r.amount.toFixed(2); setAuto("f-amount",1); got.push("amount"); }
-  if(r.currency&&CURRENCIES.includes(r.currency)){ $("#f-currency").value=r.currency; setAuto("f-currency",1); got.push("currency"); }
-  if(r.date){ $("#f-date").value=r.date; setAuto("f-date",1); got.push("date"); }
-  if(r.category&&$("#f-cat").value==="Other"){ $("#f-cat").value=r.category; setAuto("f-cat",1); got.push("category"); }
-  if(r.merchant&&!$("#f-merchant").value){ $("#f-merchant").value=r.merchant; setAuto("f-merchant",1); got.push("merchant"); }
+  const got=[], empty=id=>!$("#"+id).value||$("#"+id).classList.contains("auto");
+  if(r.amount&&empty("f-amount")){ $("#f-amount").value=r.amount.toFixed(2); setAuto("f-amount",1); got.push(1); }
+  if(r.currency&&CURRENCIES.includes(r.currency)){ $("#f-currency").value=r.currency; setAuto("f-currency",1); got.push(1); }
+  if(r.date){ $("#f-date").value=r.date; setAuto("f-date",1); got.push(1); }
+  if(r.category&&$("#f-cat").value==="Other"){ $("#f-cat").value=r.category; setAuto("f-cat",1); got.push(1); }
+  if(r.merchant&&!$("#f-merchant").value){ $("#f-merchant").value=r.merchant; setAuto("f-merchant",1); got.push(1); }
   syncConv(true);
   if(got.length){ status(`<span style="color:var(--good)">✓</span> Read from receipt`); $("#revHint").textContent="Check the highlighted fields, then add the reason."; }
   else { status("Couldn't read the amount"); $("#revHint").textContent="Enter the amount and date from the receipt."; }
   if(!$("#f-reason").value) setTimeout(()=>{ if(view==="review") $("#f-reason").focus({preventScroll:true}); },50);
 }
-
-/* currency conversion */
 function syncConv(reset){
   const c=$("#f-currency").value, foreign=c!==S.base;
   $("#convBox").hidden=!foreign; $$(".ccyLbl").forEach(x=>x.textContent=S.base);
@@ -522,7 +785,6 @@ $("#f-currency").onchange=()=>{setAuto("f-currency",false);syncConv(true)};
 $("#f-amount").addEventListener("input",recalc);
 $("#f-rate").oninput=()=>{claimTouched=false;recalc()};
 $("#f-claim").oninput=()=>{claimTouched=true;const a=num($("#f-amount").value),c=num($("#f-claim").value);if(isFinite(a)&&a>0&&isFinite(c))$("#f-rate").value=+(c/a).toFixed(4);updateHint()};
-
 function compress(file,max,q){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),img=new Image();
   img.onload=()=>{let w=img.width,h=img.height;const k=Math.min(1,max/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);
     const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",q))};
@@ -530,7 +792,7 @@ function compress(file,max,q){return new Promise((res,rej)=>{const url=URL.creat
 
 $("#form").onsubmit=async ev=>{
   ev.preventDefault();
-  const amount=num($("#f-amount").value), currency=$("#f-currency").value, reason=$("#f-reason").value.trim(), merchant=$("#f-merchant").value.trim();
+  const amount=num($("#f-amount").value), currency=$("#f-currency").value, reason=$("#f-reason").value.trim(), merchant=$("#f-merchant").value.trim(), folderId=$("#f-folder").value;
   if(!isFinite(amount)||amount<=0){toast("Enter the amount on the receipt.");$("#f-amount").focus();return}
   if(!reason){toast("Add the reason for this expense.");$("#f-reason").focus();return}
   let cl=amount;
@@ -539,137 +801,30 @@ $("#form").onsubmit=async ev=>{
   const e=Object.assign(editing||{id:uid(),created:Date.now()},{
     date:$("#f-date").value||today(),category:$("#f-cat").value,merchant,reason,desc:[merchant,reason].filter(Boolean).join(" – "),
     amount:r2(amount),currency,claim:r2(cl),claimCcy:S.base,photo});
-  delete e.sample;
-  try{await put("expenses",e)}catch{toast("Phone storage is full. Delete old sent reports.");return}
+  if(folderId&&folderId!=="__new") e.folderId=folderId; else delete e.folderId;
+  delete e.sample; delete e.reportId;
+  try{await put("expenses",e)}catch{toast("Phone storage is full. Delete old folders or photos.");return}
   const wasEdit=!!editing; editing=null; scanToken++;
-  await reload(); show("home");
-  if(wasEdit) toast("Changes saved"); else toast(`Added to report · ${fmt(claim(e),S.base)}`,"Scan next",startScan);
+  await reload();
+  const f=folderById(e.folderId);
+  if(f&&returnTo==="folder"&&openFolderId!==f.id) openFolderId=f.id;
+  back();
+  if(wasEdit) toast("Changes saved");
+  else toast(`Saved to ${f?f.name:"Expenses"} · ${fmt(claim(e),S.base)}`,"Scan next",()=>startScan(scanFolder));
 };
-$("#revCancel").onclick=()=>{scanToken++;editing=null;show("home")};
-$("#delBtn").onclick=()=>{ if(!editing) return; const e=editing;
-  openSheet(`<b style="font-size:18px">Delete this expense?</b><p class="sub">${esc(descOf(e))} · ${fmt(e.amount,e.currency)}. This can't be undone.</p>
-  <div class="grid2"><button class="btn" id="cNo">Keep</button><button class="btn" id="cYes" style="background:var(--bad);border-color:var(--bad);color:#fff">Delete</button></div>`);
-  $("#cNo").onclick=closeModal; $("#cYes").onclick=async()=>{closeModal();await del("expenses",e.id);editing=null;await reload();toast("Expense deleted");show("home")};
-};
-
-/* ---------- Send report ---------- */
-let sending=false, pending=null;
-function nextReportNo(){
-  const ini=(S.name||"XX").split(/\s+/).filter(Boolean).map(w=>w[0]).join("").toUpperCase().slice(0,3);
-  const ym=today().slice(2,7).replace("-",""); const n=REPORTS.filter(r=>r.no.includes(`-${ym}-`)).length+1;
-  return `EXP-${ini}-${ym}-${String(n).padStart(2,"0")}`;
-}
-$("#sendBtn").onclick=()=>{
-  if(!S.name){toast("Add your name in Profile first.");show("profile");return}
-  const rows=inProgress().sort((a,b)=>a.date.localeCompare(b.date)||a.created-b.created); if(!rows.length) return;
-  const tot=rows.reduce((a,e)=>a+claim(e),0), from=rows[0].date, to=rows[rows.length-1].date, no=nextReportNo();
-  const noR=rows.filter(e=>!reasonOf(e)).length, noP=rows.filter(e=>!e.photo).length, dup=rows.filter(e=>DUP.has(e.id)).length;
-  pending={no,rows,tot,from,to,file:null};
-  openSheet(`
-    <div class="row between"><b style="font-size:18px">Send report</b><button class="btn small" id="sClose">Cancel</button></div>
-    <div class="card" style="padding:12px 14px">
-      <div class="stat"><span>Report</span><span class="v">${no}</span></div>
-      <div class="stat"><span>Period</span><span>${fmtDate(from)} – ${fmtDate(to)}</span></div>
-      <div class="stat"><span>Expenses</span><span class="v">${rows.length}</span></div>
-      <div class="stat"><span>Grand total</span><span class="v">${fmt(tot,S.base)}</span></div>
-    </div>
-    ${noR||noP||dup?`<div class="notice"><span>${[noR&&`<b>${noR}</b> without a reason`,noP&&`<b>${noP}</b> without a receipt`,dup&&`<b>${dup}</b> possible duplicates`].filter(Boolean).join(" · ")}. You can still send.</span></div>`:""}
-    <button class="btn primary big block" id="sMake">1 · Create PDF</button>
-    <button class="btn big block" id="sShare" disabled>2 · Email to accounting</button>
-    <p class="sub" id="sNote">The PDF includes all ${rows.length} expenses and their receipts. After you send it, the report moves to <b>Sent</b> and a new empty report starts.</p>
-    <div class="stack" id="sConfirm" hidden style="gap:10px">
-      <p class="sub">Did the email go out?</p>
-      <div class="grid2"><button class="btn" id="sNo">Not yet</button><button class="btn primary" id="sYes">Yes, move to Sent</button></div>
-    </div>`);
-  $("#sClose").onclick=()=>{pending=null;closeModal()};
-  $("#sMake").onclick=makePdf;
-  $("#sShare").onclick=shareIt;
-  $("#sNo").onclick=()=>{$("#sConfirm").hidden=true};
-  $("#sYes").onclick=finalize;
-};
-async function makePdf(){
-  if(!window.jspdf){toast("PDF engine not loaded. Connect to the internet and reopen the app.");return}
-  const b=$("#sMake"); b.disabled=true; b.textContent="Creating PDF…"; sending=true;
-  try{
-    const {blob,name}=await buildPDF(pending.rows,pending.from,pending.to,pending.no);
-    pending.file=new File([blob],name,{type:"application/pdf"});
-    b.textContent=`✓ PDF ready · ${(blob.size/1048576).toFixed(1)} MB`; b.classList.remove("primary");
-    const s=$("#sShare"); s.disabled=false; s.classList.add("primary");
-    $("#sNote").innerHTML=canShareFile(pending.file)
-      ?"Choose Mail or Outlook. The PDF is attached; add the accounting address in “To” and send."
-      :"The PDF will download and a new email opens. Attach the PDF, add the accounting address, send.";
-  }catch(err){console.error(err);b.disabled=false;b.textContent="1 · Create PDF";toast("Could not create the PDF. Try again.")}
-  sending=false;
-}
-const canShareFile=f=>!!(navigator.canShare&&navigator.canShare({files:[f]}));
-const subjectLine=p=>`Expense report ${p.no} – ${S.name} – ${fmtDate(p.from)} to ${fmtDate(p.to)}`;
-const bodyText=p=>`Hello,\n\nPlease find attached my expense report ${p.no} for ${fmtDate(p.from)} to ${fmtDate(p.to)}: ${p.rows.length} expense(s), grand total ${fmt(p.tot,S.base)}, receipts included.\n\nBest regards,\n${S.name}`;
-function download(file){const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-async function shareIt(){
-  const p=pending; if(!p?.file) return;
-  if(canShareFile(p.file)){
-    try{ await navigator.share({files:[p.file],title:subjectLine(p),text:bodyText(p)}); await finalize(); }
-    catch(e){ if(e.name!=="AbortError") toast("Sharing failed. Try again."); }
-  } else {
-    download(p.file);
-    setTimeout(()=>{location.href=`mailto:?subject=${encodeURIComponent(subjectLine(p))}&body=${encodeURIComponent(bodyText(p)+"\n\n[Attach "+p.file.name+"]")}`},600);
-    $("#sConfirm").hidden=false;
-  }
-}
-async function finalize(){
-  const p=pending; if(!p) return; pending=null;
-  const rep={id:uid(),no:p.no,sentAt:Date.now(),from:p.from,to:p.to,total:r2(p.tot),ccy:S.base,count:p.rows.length,ids:p.rows.map(e=>e.id),fileName:p.file?.name||""};
-  await put("reports",rep);
-  for(const e of p.rows){ e.reportId=rep.id; e.status="sent"; await put("expenses",e); }
-  closeModal(); await reload(); show("sent");
-  toast(`${rep.no} moved to Sent. New report started.`);
-}
-
-/* ---------- Sent reports ---------- */
-function renderSent(){
-  const L=$("#sentList"), reps=[...REPORTS].sort((a,b)=>b.sentAt-a.sentAt);
-  if(!reps.length){ L.innerHTML=`<div class="card empty"><b>No reports sent yet</b><p class="sub">When you send your current report, it appears here with its PDF, so you always know what accounting has received.</p></div>`; return; }
-  L.innerHTML=reps.map(r=>`<button class="rep" data-id="${r.id}">
-    <div class="top"><span class="no">${esc(r.no)}</span><span class="tot">${fmt(r.total,r.ccy)}</span></div>
-    <div class="row between"><span class="sub">${fmtDate(r.from)} – ${fmtDate(r.to)} · ${r.count} expense${r.count>1?"s":""}</span><span class="tag ok" style="margin:0;white-space:nowrap">Sent ${dmmm(isoOf(new Date(r.sentAt)))}</span></div>
-  </button>`).join("");
-  $$("#sentList .rep").forEach(b=>b.onclick=()=>openReport(REPORTS.find(r=>r.id===b.dataset.id)));
-}
-function openReport(r){
-  const rows=ALL.filter(e=>e.reportId===r.id).sort((a,b)=>a.date.localeCompare(b.date));
-  openSheet(`
-    <div class="row between"><b style="font-size:18px">${esc(r.no)}</b><button class="btn small" id="rClose">Close</button></div>
-    <div class="card" style="padding:12px 14px">
-      <div class="stat"><span>Sent</span><span>${fmtDate(isoOf(new Date(r.sentAt)))}</span></div>
-      <div class="stat"><span>Period</span><span>${fmtDate(r.from)} – ${fmtDate(r.to)}</span></div>
-      <div class="stat"><span>Grand total</span><span class="v">${fmt(r.total,r.ccy)}</span></div>
-    </div>
-    <div class="card" style="padding:6px 14px">${rows.map(e=>`<div class="mini"><span class="sub">${dmmm(e.date)}</span><span>${esc(descOf(e))}</span><span>${fmt(claim(e))}</span></div>`).join("")}</div>
-    <div class="grid2"><button class="btn" id="rPdf">Save PDF</button><button class="btn primary" id="rMail">Email again</button></div>
-    <button class="btn small danger" id="rReopen" style="align-self:center">Not actually sent? Move back to In progress</button>`);
-  $("#rClose").onclick=closeModal;
-  const rebuild=async()=>{ const {blob,name}=await buildPDF(rows,r.from,r.to,r.no); return new File([blob],name,{type:"application/pdf"}); };
-  $("#rPdf").onclick=async()=>download(await rebuild());
-  $("#rMail").onclick=async()=>{ const f=await rebuild(); const p={no:r.no,from:r.from,to:r.to,rows,tot:r.total,file:f};
-    if(canShareFile(f)){ try{await navigator.share({files:[f],title:subjectLine(p),text:bodyText(p)})}catch{} } else { download(f); } };
-  $("#rReopen").onclick=()=>{
-    openSheet(`<b style="font-size:18px">Move ${esc(r.no)} back to In progress?</b><p class="sub">Its ${rows.length} expenses rejoin your current report. Use this only if the email was never sent.</p>
-      <div class="grid2"><button class="btn" id="cNo">Cancel</button><button class="btn primary" id="cYes">Move back</button></div>`);
-    $("#cNo").onclick=closeModal;
-    $("#cYes").onclick=async()=>{ for(const e of rows){ delete e.reportId; e.status="open"; await put("expenses",e); } await del("reports",r.id); closeModal(); await reload(); show("home"); toast("Expenses moved back to In progress"); };
-  };
-}
+$("#revCancel").onclick=()=>{scanToken++;editing=null;back()};
+$("#delBtn").onclick=()=>{ if(editing) confirmDelete([editing.id]); };
 
 /* ---------- PDF: Novus Expense Form ---------- */
-async function buildPDF(rows,from,to,no){
+async function buildPDF(rows,folder){
   const {jsPDF}=window.jspdf, doc=new jsPDF({unit:"mm",format:"a4"});
   const W=210,H=297,M=14, NAVY=[9,60,113], STEEL=[151,164,175], INK=[11,34,56], GREY=[107,120,132], LINE=[205,213,221], TINT=[238,242,246];
-  const tot=rows.reduce((a,e)=>a+claim(e),0);
-  const name=`${no} - ${S.name} - ${fmtDate(from)} to ${fmtDate(to)}.pdf`.replace(/[\/\\:]/g,"-");
+  const tot=sumOf(rows), ds=rows.map(e=>e.date).sort(), from=ds[0], to=ds[ds.length-1];
+  const name=`Novus Expense Form - ${folder.name} - ${S.name}.pdf`.replace(/[\/\\:*?"<>|]/g,"-");
   const lp=doc.getImageProperties(LOGO),lh=16; doc.addImage(LOGO,"PNG",M,9,lp.width*lh/lp.height,lh);
   doc.setTextColor(...NAVY); doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.text("EXPENSE FORM",W-M,16,{align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...GREY);
-  doc.text(`Report ${no}`,W-M,21.5,{align:"right"}); doc.text(`Prepared ${fmtDate(today())}`,W-M,25.5,{align:"right"});
+  doc.text(`${folder.name} · ${folder.no||""}`,W-M,21.5,{align:"right"}); doc.text(`Prepared ${fmtDate(today())}`,W-M,25.5,{align:"right"});
   doc.setFillColor(...NAVY); doc.rect(M,30,W-2*M,0.8,"F");
   const gx=[M,M+(W-2*M)/2], gw=(W-2*M)/2, gy=33, rh=9;
   const cells=[["NAME",S.name,0,0,2],["PERIOD FROM",fmtDate(from),1,0,1],["PERIOD TO",fmtDate(to),1,1,1]];
@@ -708,7 +863,7 @@ async function buildPDF(rows,from,to,no){
   withP.forEach((e,i)=>{
     const col=i%2; if(col===0){doc.addPage();
       doc.addImage(LOGO,"PNG",M,8,lp.width*9/lp.height,9);
-      doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...NAVY);doc.text(`RECEIPTS · ${no}`,W-M,14,{align:"right"});
+      doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...NAVY);doc.text(`RECEIPTS · ${folder.name}`,W-M,14,{align:"right"});
       doc.setFillColor(...NAVY);doc.rect(M,20,W-2*M,.6,"F")}
     const x=M+col*(slotW+8);
     doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(...NAVY);doc.text(`R${photoIdx[e.id]}  ·  ${dmmm(e.date)}`,x,top-1.5);
@@ -720,7 +875,7 @@ async function buildPDF(rows,from,to,no){
   });
   const pages=doc.getNumberOfPages();
   for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...GREY);
-    doc.text(`${COMPANY} · ${no} · ${S.name} · ${fmtDate(from)} – ${fmtDate(to)}`,M,H-8);doc.text(`Page ${p} of ${pages}`,W-M,H-8,{align:"right"})}
+    doc.text(`${COMPANY} · ${folder.name} · ${folder.no||""} · ${S.name}`,M,H-8);doc.text(`Page ${p} of ${pages}`,W-M,H-8,{align:"right"})}
   return {blob:doc.output("blob"),name};
 }
 
@@ -730,7 +885,7 @@ $("#sForm").onsubmit=ev=>{ev.preventDefault();
   const base=$("#s-base").value; if(base!==S.base){S.rates={...DEFAULT_RATES[base]}}
   S.name=$("#s-name").value.trim(); S.base=base;
   if(!S.name){toast("Enter your name. It is printed on every report.");return}
-  saveProfile(); renderHome(); renderRates(); toast("Profile saved"); show("home")};
+  saveProfile(); renderRates(); toast("Profile saved"); show("inbox")};
 function renderRates(){
   $("#ratesSub").textContent=`Value of 1 unit in ${S.base}. Pre-fills new expenses; override per receipt with the card-statement amount.`;
   const keys=Object.keys(S.rates).filter(k=>k!==S.base);
@@ -742,15 +897,16 @@ function renderRates(){
 }
 $("#addRate").onclick=()=>{const c=CURRENCIES.find(c=>c!==S.base&&!(c in S.rates));if(c){S.rates[c]=1;saveProfile();renderRates()}};
 $("#csvBtn").onclick=()=>{
-  const h=["date","merchant","reason","expense_category","amount_"+S.base,"initial","currency","receipt","report"];
-  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`, rn=id=>REPORTS.find(r=>r.id===id)?.no||"in progress";
-  const csv=[h.join(",")].concat([...ALL].sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.date,merchantOf(e),reasonOf(e),e.category,claim(e).toFixed(2),e.amount,e.currency,e.photo?"x":"",rn(e.reportId)].map(q).join(","))).join("\n");
+  const h=["date","merchant","reason","expense_category","amount_"+S.base,"initial","currency","receipt","folder","folder_status"];
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const csv=[h.join(",")].concat([...ALL].sort((a,b)=>a.date.localeCompare(b.date)).map(e=>{const f=folderById(e.folderId);
+    return [e.date,merchantOf(e),reasonOf(e),e.category,claim(e).toFixed(2),e.amount,e.currency,e.photo?"x":"",f?f.name:"",f?STATUS[f.status]:""].map(q).join(",")})).join("\n");
   download(new File(["﻿"+csv],`novus-expenses-${today()}.csv`,{type:"text/csv"}));
 };
 $("#wipeBtn").onclick=()=>{
-  openSheet(`<b style="font-size:18px">Delete all expenses, photos and reports?</b><p class="sub">Everything stored on this phone will be erased. Export a CSV first if you need a record.</p>
+  openSheet(`<b style="font-size:18px">Delete all expenses, photos and folders?</b><p class="sub">Everything stored on this phone will be erased. Export a CSV first if you need a record.</p>
   <div class="grid2"><button class="btn" id="cNo">Cancel</button><button class="btn" id="cYes" style="background:var(--bad);border-color:var(--bad);color:#fff">Delete all</button></div>`);
-  $("#cNo").onclick=closeModal; $("#cYes").onclick=async()=>{closeModal();await clear("expenses");await clear("reports");await reload();toast("All data deleted");show("home")};
+  $("#cNo").onclick=closeModal; $("#cYes").onclick=async()=>{closeModal();for(const n of ["expenses","reports","folders"]) await clear(n);await reload();toast("All data deleted");show("inbox")};
 };
 
 /* ---------- sample ---------- */
@@ -761,15 +917,18 @@ async function loadSamples(){
   let i=0; for(const [category,merchant,reason,amount,currency,ago] of s){
     const cl=currency===S.base?amount:r2(amount*(R[currency]||1));
     await put("expenses",{id:uid(),created:Date.now()+i++,date:d(ago),category,merchant,reason,desc:merchant+" – "+reason,amount,currency,claim:cl,claimCcy:S.base,photo:null,sample:true});}
-  await reload(); toast("Sample trip loaded. Edit or delete these anytime.");
+  await reload(); toast("Sample trip loaded. Select them to try moving into a folder.");
 }
 
-/* ---------- migration: earlier "submitted" expenses become one sent report ---------- */
+/* ---------- migration: v2 reports and v1 "submitted" expenses become folders marked Sent ---------- */
 async function migrate(){
-  const old=ALL.filter(e=>!e.reportId&&e.status==="submitted"); if(!old.length) return;
-  const ds=old.map(e=>e.date).sort();
-  const rep={id:uid(),no:"EXP-EARLIER",sentAt:Math.max(...old.map(e=>e.submittedAt||Date.now())),from:ds[0],to:ds[ds.length-1],total:r2(old.reduce((a,e)=>a+claim(e),0)),ccy:S.base,count:old.length,ids:old.map(e=>e.id)};
-  await put("reports",rep); for(const e of old){e.reportId=rep.id;await put("expenses",e)}
+  const reps=await all("reports"); let fs=await all("folders"); let exps=await all("expenses");
+  for(const r of reps){ if(fs.some(f=>f.id===r.id)) continue;
+    const f={id:r.id,name:r.no==="EXP-EARLIER"?"Earlier expenses":monthLabel(r.from),no:r.no,status:"sent",statusAt:{sent:r.sentAt},created:r.sentAt}; await put("folders",f); fs.push(f); }
+  for(const e of exps){ if(e.reportId&&!e.folderId){ e.folderId=e.reportId; delete e.reportId; await put("expenses",e); } }
+  const old=exps.filter(e=>!e.folderId&&e.status==="submitted");
+  if(old.length){ const ds=old.map(e=>e.date).sort(); const f={id:uid(),name:"Earlier expenses",no:"EXP-EARLIER",status:"sent",statusAt:{sent:Date.now()},created:Date.now()-1};
+    await put("folders",f); for(const e of old){ e.folderId=f.id; await put("expenses",e); } }
 }
 
 function setupIcon(){
@@ -777,13 +936,13 @@ function setupIcon(){
   const m={name:"Novus Expense Form",short_name:"Expenses",start_url:location.href.split("#")[0],display:"standalone",background_color:"#FFFFFF",theme_color:"#093C71",icons:[{src:ICON,sizes:"180x180",type:"image/png"}]};
   $("#manifestLink").href="data:application/manifest+json,"+encodeURIComponent(JSON.stringify(m));
 }
-async function reload(){ ALL=await all("expenses"); REPORTS=await all("reports"); findDups(); renderHome(); if(view==="sent") renderSent(); }
+async function reload(){ ALL=await all("expenses"); FOLDERS=await all("folders"); findDups(); renderHeader(); if(view!=="review") rerenderView(); }
+function rerenderView(){ if(view==="inbox") renderInbox(); else if(view==="folders") renderFolders(); else if(view==="folder") renderFolder(); }
 (async()=>{
   setupIcon(); fillSelect($("#f-currency"),CURRENCIES,S.base);
-  try{ await openDB(); ALL=await all("expenses"); await migrate(); await reload(); }catch{ toast("This browser blocks storage. Open the app in Safari or Chrome."); }
+  try{ await openDB(); await migrate(); await reload(); }catch(err){ console.error(err); toast("This browser blocks storage. Open the app in Safari or Chrome."); }
   try{ navigator.storage?.persist?.() }catch{}
-  if(!S.name) show("profile");
-  /* warm up the receipt reader in the background so the first scan is quick */
+  if(!S.name) show("profile"); else show("inbox");
   const warm=()=>{ if(navigator.onLine) loadOCR().catch(()=>{}); };
   ("requestIdleCallback" in window)?requestIdleCallback(()=>setTimeout(warm,1500)):setTimeout(warm,3000);
 })();
