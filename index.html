@@ -106,10 +106,6 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .rates{display:flex;flex-direction:column;gap:8px}
 .rate{display:grid;grid-template-columns:90px minmax(0,1fr) 40px;gap:8px;align-items:center}
 .rate input{font-family:var(--f-num)}
-.sigbox{position:relative;border:1px solid var(--line);border-radius:12px;background:#FFFFFF;height:150px;touch-action:none}
-.sigbox canvas{width:100%;height:100%;display:block;border-radius:12px}
-.sigbox .hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:#8A96A2;pointer-events:none}
-.sigbox::after{content:"";position:absolute;left:12px;right:12px;bottom:32px;border-top:1px solid #D5DEE7;pointer-events:none}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr);align-items:end}
@@ -210,8 +206,6 @@ nav.tabs .add span.plus{width:50px;height:50px;border-radius:16px;background:var
       <div class="row" style="justify-content:space-between"><b id="pdfName"></b><span class="sub" id="pdfSize"></span></div>
       <button class="btn primary block" id="shareBtn">Email PDF to accounting</button>
       <button class="btn block" id="dlBtn">Save PDF to device</button>
-      <div class="field"><span class="label">Accounting address</span>
-        <div class="copybox"><code id="acctMail">not set</code><button class="btn small" id="copyMail">Copy</button></div></div>
       <ol class="steps" id="sendSteps"></ol>
       <button class="btn block" id="markBtn">Mark these expenses as submitted</button>
     </div>
@@ -222,20 +216,9 @@ nav.tabs .add span.plus{width:50px;height:50px;border-radius:16px;background:var
     <div><h2>Profile</h2><p class="sub">Filled once. Printed on every expense form.</p></div>
     <form id="sForm" class="card stack" novalidate>
       <div class="field"><label class="label" for="s-name">Name</label><input id="s-name" autocomplete="name" placeholder="e.g. Picard Cyrille"></div>
-      <div class="grid2">
-        <div class="field"><label class="label" for="s-dept">Dept</label><input id="s-dept" placeholder="e.g. NAC"></div>
-        <div class="field"><label class="label" for="s-base">Claim currency</label><select id="s-base"><option>AED</option><option>USD</option></select></div>
-      </div>
-      <div class="field"><label class="label" for="s-mgr">Approved by</label><input id="s-mgr" placeholder="Approver name"></div>
-      <div class="field"><label class="label" for="s-acct">Accounting email</label><input id="s-acct" type="email" inputmode="email" placeholder="accounts@novusaviation.com"></div>
+      <div class="field"><label class="label" for="s-base">Claim currency</label><select id="s-base"><option>AED</option><option>USD</option></select></div>
       <button class="btn primary block" type="submit">Save profile</button>
     </form>
-
-    <div class="card stack">
-      <div><span class="label">Signature</span><p class="sub">Sign once with your finger. It is placed on every expense form.</p></div>
-      <div class="sigbox"><canvas id="sig"></canvas><span class="hint" id="sigHint">Sign here</span></div>
-      <div class="grid2"><button class="btn" id="sigClear" type="button">Clear</button><button class="btn primary" id="sigSave" type="button">Save signature</button></div>
-    </div>
 
     <div class="card stack">
       <div><span class="label">Exchange rates</span><p class="sub" id="ratesSub"></p></div>
@@ -282,7 +265,8 @@ const store=m=>db.transaction("expenses",m).objectStore("expenses");
 const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const dbAll=()=>req(store("readonly").getAll()), dbPut=o=>req(store("readwrite").put(o)), dbDel=id=>req(store("readwrite").delete(id)), dbClear=()=>req(store("readwrite").clear());
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}}};
-let S=Object.assign({name:"",dept:"",mgr:"",acct:"",base:"AED",rates:null,sig:""},ls.get("novus-profile",{}));
+let S=Object.assign({name:"",base:"AED",rates:null},ls.get("novus-profile",{}));
+["dept","mgr","acct","sig"].forEach(k=>delete S[k]); /* retired profile fields */
 if(!S.rates) S.rates={...DEFAULT_RATES[S.base]};
 let ALL=[];
 
@@ -315,7 +299,7 @@ function show(v){
 $$("nav.tabs button").forEach(b=>b.onclick=()=>{editing=null;show(b.dataset.v)});
 
 function renderHeader(){
-  $("#whoLine").textContent=S.name?[S.name,S.dept].filter(Boolean).join(" · "):"Set up your profile";
+  $("#whoLine").textContent=S.name||"Set up your profile";
   const open=ALL.filter(e=>e.status!=="submitted");
   $("#headTotal").textContent=open.length?fmt(open.reduce((a,e)=>a+claim(e),0),S.base)+" open":"All clear";
 }
@@ -486,7 +470,7 @@ function renderReport(changed){
 
 $("#buildBtn").onclick=async()=>{
   if(!window.jspdf){toast("PDF engine not loaded. Open the app once with internet, then try again.");return}
-  if(!S.name||!S.dept){toast("Add your name and dept in Profile first.");show("settings");return}
+  if(!S.name){toast("Add your name in Profile first.");show("settings");return}
   const rows=reportRows(); if(!rows.length) return;
   const b=$("#buildBtn"); b.disabled=true; b.textContent="Building…";
   try{
@@ -494,12 +478,11 @@ $("#buildBtn").onclick=async()=>{
     const {blob,name}=await buildPDF(rows,from,to);
     lastPDF=new File([blob],name,{type:"application/pdf"}); lastIds=rows.map(e=>e.id);
     $("#pdfName").textContent=name; $("#pdfSize").textContent=(blob.size/1048576).toFixed(1)+" MB";
-    $("#acctMail").textContent=S.acct||"not set — add it in Profile";
     const canShare=!!(navigator.canShare&&navigator.canShare({files:[lastPDF]}));
     $("#shareBtn").textContent=canShare?"Email PDF to accounting":"Save PDF and open email";
     $("#sendSteps").innerHTML=canShare
-      ?`<li>Tap <b>Email PDF to accounting</b>, choose Mail or Outlook.</li><li>The PDF is attached. Paste the accounting address in “To”.</li><li>Send, then tap <b>Mark as submitted</b>.</li>`
-      :`<li>The PDF downloads and an email to accounting opens.</li><li>Attach the PDF and send.</li><li>Tap <b>Mark as submitted</b>.</li>`;
+      ?`<li>Tap <b>Email PDF to accounting</b>, choose Mail or Outlook.</li><li>The PDF is attached. Add the accounting address in “To”.</li><li>Send, then tap <b>Mark as submitted</b>.</li>`
+      :`<li>The PDF downloads and a new email opens.</li><li>Add the accounting address, attach the PDF and send.</li><li>Tap <b>Mark as submitted</b>.</li>`;
     $("#sendCard").hidden=false; $("#sendCard").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(err){console.error(err);toast("Could not build the PDF. Try a shorter period.")}
   b.disabled=false; b.textContent="Build PDF expense form";
@@ -507,16 +490,15 @@ $("#buildBtn").onclick=async()=>{
 const fileBase=(from,to)=>`Novus Expense Form - ${S.name} - ${fmtDate(from)} to ${fmtDate(to)}`.replace(/[\/\\:]/g,"-");
 const subjectLine=()=>`Expense form – ${S.name} – ${fmtDate($("#r-from").value)} to ${fmtDate($("#r-to").value)}`;
 function bodyText(rows){const t=rows.reduce((a,e)=>a+claim(e),0);
-  return `Hello,\n\nPlease find attached my expense form for ${fmtDate($("#r-from").value)} to ${fmtDate($("#r-to").value)}: ${rows.length} line(s), grand total ${fmt(t,S.base)}, receipts included.\n\nBest regards,\n${S.name}${S.dept?"\n"+S.dept:""}`}
+  return `Hello,\n\nPlease find attached my expense form for ${fmtDate($("#r-from").value)} to ${fmtDate($("#r-to").value)}: ${rows.length} line(s), grand total ${fmt(t,S.base)}, receipts included.\n\nBest regards,\n${S.name}`}
 function download(file){const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
 $("#shareBtn").onclick=async()=>{
   if(!lastPDF) return; const rows=ALL.filter(e=>lastIds.includes(e.id));
   if(navigator.canShare&&navigator.canShare({files:[lastPDF]})){
     try{await navigator.share({files:[lastPDF],title:subjectLine(),text:bodyText(rows)})}catch(e){if(e.name!=="AbortError")toast("Sharing failed. Use Save PDF instead.")}
-  }else{download(lastPDF);setTimeout(()=>{location.href=`mailto:${encodeURIComponent(S.acct||"")}?subject=${encodeURIComponent(subjectLine())}&body=${encodeURIComponent(bodyText(rows)+"\n\n[Attach "+lastPDF.name+"]")}`},600)}
+  }else{download(lastPDF);setTimeout(()=>{location.href=`mailto:?subject=${encodeURIComponent(subjectLine())}&body=${encodeURIComponent(bodyText(rows)+"\n\n[Attach "+lastPDF.name+"]")}`},600)}
 };
 $("#dlBtn").onclick=()=>lastPDF&&download(lastPDF);
-$("#copyMail").onclick=async()=>{try{await navigator.clipboard.writeText(S.acct);toast("Address copied")}catch{const r=document.createRange();r.selectNodeContents($("#acctMail"));getSelection().removeAllRanges();getSelection().addRange(r)}};
 $("#markBtn").onclick=async()=>{
   const now=Date.now();
   for(const id of lastIds){const e=ALL.find(x=>x.id===id);if(e&&e.status!=="submitted"){e.status="submitted";e.submittedAt=now;e.form=lastPDF?.name||"";await dbPut(e)}}
@@ -536,15 +518,15 @@ async function buildPDF(rows,from,to){
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text(`Prepared ${fmtDate(today())}`,W-M,22.5,{align:"right"});
   doc.setFillColor(...NAVY); doc.rect(M,30,W-2*M,0.8,"F");
 
-  // Header grid: NAME / DEPT | PERIOD FROM / PERIOD TO
+  // Header grid: NAME (left, spans both rows) | PERIOD FROM / PERIOD TO
   const gx=[M,M+(W-2*M)/2], gw=(W-2*M)/2, gy=33, rh=9;
-  const cells=[["NAME",S.name,0,0],["PERIOD FROM",dmmmY(from),1,0],["DEPT",S.dept,0,1],["PERIOD TO",dmmmY(to),1,1]];
+  const cells=[["NAME",S.name,0,0,2],["PERIOD FROM",dmmmY(from),1,0,1],["PERIOD TO",dmmmY(to),1,1,1]];
   doc.setDrawColor(...LINE); doc.setLineWidth(.2);
-  for(const [lab,val,c,r] of cells){
-    const x=gx[c], y=gy+r*rh;
-    doc.setFillColor(...TINT); doc.rect(x,y,30,rh,"FD"); doc.rect(x+30,y,gw-30,rh,"S");
-    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(...GREY); doc.text(lab,x+3,y+5.8);
-    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.text(doc.splitTextToSize(String(val||"—"),gw-36)[0],x+33,y+6);
+  for(const [lab,val,c,r,span] of cells){
+    const x=gx[c], y=gy+r*rh, h=rh*span, mid=y+h/2;
+    doc.setFillColor(...TINT); doc.rect(x,y,30,h,"FD"); doc.rect(x+30,y,gw-30,h,"S");
+    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(...GREY); doc.text(lab,x+3,mid+1.3);
+    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.text(doc.splitTextToSize(String(val||"—"),gw-36)[0],x+33,mid+1.5);
   }
 
   // Lines table — same columns as the Novus form
@@ -572,8 +554,6 @@ async function buildPDF(rows,from,to){
   const bw=(W-2*M-12)/2, bx2=M+bw+12;
   doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...NAVY);
   doc.text("SIGNATURE:",M,y); doc.text("APPROVED BY:",bx2,y);
-  if(S.sig){const sp=doc.getImageProperties(S.sig),sh=20,sw=Math.min(bw-4,sp.width*sh/sp.height);doc.addImage(S.sig,"PNG",M+2,y+2,sw,sw*sp.height/sp.width)}
-  if(S.mgr){doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(...INK);doc.text(S.mgr,bx2,y+18)}
   doc.setDrawColor(...STEEL); doc.setLineWidth(.3); doc.line(M,y+24,M+bw,y+24); doc.line(bx2,y+24,bx2+bw,y+24);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...GREY);
   doc.text(`Employee — ${S.name}`,M,y+29); doc.text("Department",bx2,y+29);
@@ -604,13 +584,12 @@ function dmmmY(d){return d?fmtDate(d):"—"}
 
 /* ---------- profile ---------- */
 function fillProfile(){
-  $("#s-name").value=S.name;$("#s-dept").value=S.dept;$("#s-mgr").value=S.mgr;$("#s-acct").value=S.acct;$("#s-base").value=S.base;
-  renderRates(); loadSig();
+  $("#s-name").value=S.name;$("#s-base").value=S.base;
+  renderRates();
 }
 $("#sForm").onsubmit=ev=>{ev.preventDefault();
-  const acct=$("#s-acct").value.trim(); if(acct&&!/^\S+@\S+\.\S+$/.test(acct)){toast("Check the accounting email address.");return}
   const base=$("#s-base").value; if(base!==S.base){S.rates={...DEFAULT_RATES[base]}}
-  Object.assign(S,{name:$("#s-name").value.trim(),dept:$("#s-dept").value.trim(),mgr:$("#s-mgr").value.trim(),acct,base});
+  Object.assign(S,{name:$("#s-name").value.trim(),base});
   saveProfile(); renderHeader(); renderList(); renderRates(); toast("Profile saved")};
 function renderRates(){
   $("#ratesSub").textContent=`Value of 1 unit in ${S.base}. Pre-fills new expenses; you can override per receipt with the card-statement amount.`;
@@ -622,24 +601,6 @@ function renderRates(){
   $$("#rates .rd").forEach(b=>b.onclick=()=>{delete S.rates[b.dataset.k];saveProfile();renderRates()});
 }
 $("#addRate").onclick=()=>{const c=CURRENCIES.find(c=>c!==S.base&&!(c in S.rates));if(c){S.rates[c]=1;saveProfile();renderRates()}};
-
-/* signature pad */
-const sig=$("#sig"); let sctx, drawing=false, inked=false;
-function sizeSig(){const r=sig.getBoundingClientRect();if(!r.width)return;const d=window.devicePixelRatio||1;sig.width=r.width*d;sig.height=r.height*d;sctx=sig.getContext("2d");sctx.scale(d,d);sctx.lineWidth=2.2;sctx.lineCap="round";sctx.lineJoin="round";sctx.strokeStyle="#0B2238"}
-function loadSig(){requestAnimationFrame(()=>{sizeSig();inked=false;$("#sigHint").hidden=!!S.sig;
-  if(S.sig){const im=new Image();im.onload=()=>{const r=sig.getBoundingClientRect(),k=Math.min(r.width/im.width,(r.height-10)/im.height);sctx.drawImage(im,(r.width-im.width*k)/2,(r.height-im.height*k)/2,im.width*k,im.height*k)};im.src=S.sig}})}
-const pt=e=>{const r=sig.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
-sig.onpointerdown=e=>{if(!sctx)sizeSig();drawing=true;sig.setPointerCapture(e.pointerId);const[x,y]=pt(e);sctx.beginPath();sctx.moveTo(x,y);$("#sigHint").hidden=true};
-sig.onpointermove=e=>{if(!drawing)return;const[x,y]=pt(e);sctx.lineTo(x,y);sctx.stroke();inked=true};
-sig.onpointerup=sig.onpointercancel=()=>drawing=false;
-$("#sigClear").onclick=()=>{sizeSig();inked=false;S.sig="";saveProfile();$("#sigHint").hidden=false;toast("Signature cleared")};
-$("#sigSave").onclick=()=>{if(!inked){toast(S.sig?"Signature already saved.":"Sign in the box first.");return}
-  // crop to the ink so it sits well on the form
-  const c=sig, x=c.getContext("2d"), {width:w,height:h}=c, d=x.getImageData(0,0,w,h).data; let x0=w,y0=h,x1=0,y1=0;
-  for(let yy=0;yy<h;yy+=2)for(let xx=0;xx<w;xx+=2){if(d[(yy*w+xx)*4+3]>20){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy}}
-  const pad=8,cw=Math.max(1,x1-x0+2*pad),ch=Math.max(1,y1-y0+2*pad),o=document.createElement("canvas");o.width=cw;o.height=ch;
-  o.getContext("2d").drawImage(c,x0-pad,y0-pad,cw,ch,0,0,cw,ch); S.sig=o.toDataURL("image/png");
-  ls.set("novus-profile",S)?toast("Signature saved"):toast("Could not save the signature on this device.")};
 
 $("#csvBtn").onclick=()=>{
   const h=["date","description","expense_category","amount_"+S.base,"initial","currency","receipt","trip","status","form"];
